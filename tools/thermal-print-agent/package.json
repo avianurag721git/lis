@@ -1,0 +1,13 @@
+{
+  "name": "thermal-print-agent",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Local WebSocket agent that forwards raw ZPL/EPL to thermal printers",
+  "scripts": {
+    "start": "node agent.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,148 @@
+# Production stack: Nginx (web) + Node API + PostgreSQL + Redis
+#
+# This LIS uses PostgreSQL for ACID transactions (not MongoDB). Redis backs
+# caching and BullMQ. TLS certs: see nginx/certs/README.md
+#
+# LOCAL DEVELOPMENT:
+#   docker compose up -d postgres redis
+#   Use backend/.env for local configuration
+#
+# PRODUCTION DEPLOYMENT:
+#   docker compose up -d --build
+#   https://localhost  (self-signed cert — accept browser warning)
+#   Set required secrets via Docker secrets or environment variables
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-diaglab}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: ${POSTGRES_DB:-diaglab}
+    secrets:
+      - postgres_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Runs only on first DB init (empty volume). Order: billing then SaaS / lab schemas.
+      - ./backend/database/billing.sql:/docker-entrypoint-initdb.d/01-billing.sql:ro
+      - ./backend/database/saas.sql:/docker-entrypoint-initdb.d/02-saas.sql:ro
+      - ./backend/database/saas_v2_multitenant.sql:/docker-entrypoint-initdb.d/02b-saas-v2.sql:ro
+      - ./backend/database/report_templates.sql:/docker-entrypoint-initdb.d/03-report-templates.sql:ro
+      - ./backend/database/lab_ops.sql:/docker-entrypoint-initdb.d/04-lab-ops.sql:ro
+      - ./backend/database/lab_results.sql:/docker-entrypoint-initdb.d/05-lab-results.sql:ro
+      - ./backend/database/lab_results_pathologist.sql:/docker-entrypoint-initdb.d/06-lab-results-pathologist.sql:ro
+      - ./backend/database/billing_b2b.sql:/docker-entrypoint-initdb.d/07-billing-b2b.sql:ro
+      - ./backend/database/lab_inventory_qc.sql:/docker-entrypoint-initdb.d/08-lab-inventory-qc.sql:ro
+      - ./backend/database/lab_inventory_qc_v2.sql:/docker-entrypoint-initdb.d/08b-lab-inventory-qc-v2.sql:ro
+      - ./backend/database/lab_pathologist_reject.sql:/docker-entrypoint-initdb.d/09-lab-pathologist-reject.sql:ro
+      - ./backend/database/billing_discount_approval.sql:/docker-entrypoint-initdb.d/10-billing-discount-approval.sql:ro
+      - ./backend/database/hl7_astm.sql:/docker-entrypoint-initdb.d/11-hl7-astm.sql:ro
+      - ./backend/database/patient_phi.sql:/docker-entrypoint-initdb.d/12-patient-phi.sql:ro
+      - ./backend/database/audit_immutable.sql:/docker-entrypoint-initdb.d/13-audit-immutable.sql:ro
+      - ./backend/database/whatsapp_logistics.sql:/docker-entrypoint-initdb.d/14-whatsapp-logistics.sql:ro
+      - ./backend/database/test_studio.sql:/docker-entrypoint-initdb.d/15-test-studio.sql:ro
+      - ./backend/database/hyper_accessible.sql:/docker-entrypoint-initdb.d/16-hyper-accessible.sql:ro
+      - ./backend/database/patient_age.sql:/docker-entrypoint-initdb.d/17-patient-age.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-diaglab} -d ${POSTGRES_DB:-diaglab}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    secrets:
+      - redis_password
+    command: ["sh", "-c", "redis-server --appendonly yes --maxmemory-policy noeviction --requirepass $$(cat /run/secrets/redis_password)"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "sh", "-c", "redis-cli -a $$(cat /run/secrets/redis_password) ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    expose:
+      - "5000"
+    ports:
+      # Analyzer HL7/ASTM TCP (direct host access); HTTP goes via nginx
+      - "5055:5055"
+    environment:
+      NODE_ENV: production
+      PORT: "5000"
+      ANALYZER_TCP_PORT: "5055"
+      ANALYZER_DEFAULT_TENANT_ID: ${ANALYZER_DEFAULT_TENANT_ID:-demo}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-diaglab}:$$(cat /run/secrets/postgres_password)@postgres:5432/${POSTGRES_DB:-diaglab}
+      REDIS_URL: redis://:$$(cat /run/secrets/redis_password)@redis:6379
+      # Browser hits https://localhost (nginx). Keep Vite origins for mixed local use.
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://localhost,https://127.0.0.1}
+      JWT_ACCESS_SECRET_FILE: /run/secrets/jwt_access_secret
+      JWT_REFRESH_SECRET_FILE: /run/secrets/jwt_refresh_secret
+      REPORT_ENCRYPTION_KEY_FILE: /run/secrets/report_encryption_key
+      PHI_ENCRYPTION_KEY_FILE: /run/secrets/phi_encryption_key
+      AUTH_SEED_DEMO_USER: ${AUTH_SEED_DEMO_USER:-false}
+      STRIPE_SECRET_KEY_FILE: /run/secrets/stripe_secret_key
+      STRIPE_WEBHOOK_SECRET_FILE: /run/secrets/stripe_webhook_secret
+      COOKIE_SECURE: "true"
+    secrets:
+      - postgres_password
+      - redis_password
+      - jwt_access_secret
+      - jwt_refresh_secret
+      - report_encryption_key
+      - phi_encryption_key
+      - stripe_secret_key
+      - stripe_webhook_secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_URL: ""
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
+  jwt_access_secret:
+    file: ./secrets/jwt_access_secret.txt
+  jwt_refresh_secret:
+    file: ./secrets/jwt_refresh_secret.txt
+  report_encryption_key:
+    file: ./secrets/report_encryption_key.txt
+  phi_encryption_key:
+    file: ./secrets/phi_encryption_key.txt
+  stripe_secret_key:
+    file: ./secrets/stripe_secret_key.txt
+  stripe_webhook_secret:
+    file: ./secrets/stripe_webhook_secret.txt
+
+volumes:
+  pgdata:
+  redisdata:

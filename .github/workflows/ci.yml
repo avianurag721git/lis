@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build backend
+        run: npm run build --workspace backend
+
+      - name: Build frontend
+        run: npm run build --workspace frontend
+
+      - name: Typecheck summary
+        run: echo "Build completed — add unit tests (e.g. npm test) when available."
+
+  # Placeholder deploy job — wire to your cloud (ECS, Fly, Railway, etc.)
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy placeholder
+        run: echo "Configure deployment (Docker push, kubectl, etc.) for your environment."

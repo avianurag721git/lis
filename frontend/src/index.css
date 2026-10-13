@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* Canvas — light mode */
+    --canvas: 210 40% 98%;
+    --canvas-subtle: 214 32% 96%;
+    --surface: 0 0% 100%;
+    --surface-elevated: 0 0% 100%;
+
+    --foreground: 222 47% 11%;
+    --foreground-muted: 215 16% 47%;
+    --foreground-subtle: 215 20% 65%;
+
+    --border: 214 32% 91%;
+    --border-subtle: 214 32% 94%;
+
+    --accent: 199 89% 48%; /* medical cyan #0284c7 */
+    --accent-foreground: 0 0% 100%;
+    --accent-indigo: 239 84% 67%; /* #6366f1 */
+
+    --primary-color: #0284c7;
+    --secondary-color: #6366f1;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    color-scheme: dark;
+
+    /* Canvas — premium dark #090d16 family */
+    --canvas: 222 47% 5%;
+    --canvas-subtle: 222 40% 7%;
+    --surface: 222 35% 9%;
+    --surface-elevated: 222 30% 12%;
+
+    --foreground: 210 40% 98%;
+    --foreground-muted: 215 20% 72%;
+    --foreground-subtle: 215 16% 52%;
+
+    --border: 217 33% 17%;
+    --border-subtle: 217 28% 14%;
+
+    --accent: 199 89% 48%;
+    --accent-foreground: 0 0% 100%;
+    --accent-indigo: 239 84% 67%;
+
+    --primary-color: #0284c7;
+    --secondary-color: #6366f1;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply antialiased scroll-smooth;
+  }
+
+  body {
+    @apply bg-canvas text-foreground font-sans min-h-screen;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  ::selection {
+    @apply bg-medical-cyan/25 text-foreground;
+  }
+}
+
+@layer components {
+  /* Glassmorphism containers */
+  .glass {
+    @apply backdrop-blur-md bg-white/80 dark:bg-slate-900/80
+      border border-slate-200/60 dark:border-slate-800/60
+      shadow-xl shadow-slate-900/5;
+  }
+
+  .glass-panel {
+    @apply glass rounded-xl;
+  }
+
+  .glass-card {
+    @apply glass rounded-2xl p-5 transition-all duration-300
+      hover:shadow-glass-lg hover:border-medical-cyan/20;
+  }
+
+  .glass-sidebar {
+    @apply backdrop-blur-xl bg-white/70 dark:bg-[#090d16]/90
+      border-r border-slate-200/50 dark:border-slate-800/60;
+  }
+
+  .glass-header {
+    @apply backdrop-blur-md bg-white/75 dark:bg-slate-900/75
+      border-b border-slate-200/60 dark:border-slate-800/60;
+  }
+
+  /* Premium buttons */
+  .btn-premium {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
+      transition-all duration-200 focus-visible:outline-none focus-visible:ring-2
+      focus-visible:ring-medical-cyan/50 focus-visible:ring-offset-2
+      dark:focus-visible:ring-offset-canvas disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-primary-premium {
+    @apply btn-premium bg-gradient-to-r from-medical-cyan to-medical-indigo text-white
+      shadow-md shadow-medical-cyan/20 hover:shadow-lg hover:shadow-medical-cyan/30
+      hover:brightness-110 active:scale-[0.98];
+  }
+
+  .btn-ghost-premium {
+    @apply btn-premium text-foreground-muted hover:text-foreground
+      hover:bg-surface-elevated/80;
+  }
+
+  /* Nav links */
+  .nav-link {
+    @apply flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium
+      text-foreground-muted transition-all duration-200
+      hover:bg-surface-elevated hover:text-foreground;
+  }
+
+  .nav-link-active {
+    @apply nav-link bg-medical-cyan/10 text-medical-cyan dark:bg-medical-cyan/15
+      shadow-sm shadow-medical-cyan/5;
+  }
+
+  /* Skeleton shimmer */
+  .skeleton {
+    @apply relative overflow-hidden rounded-lg bg-surface-elevated;
+  }
+
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--foreground) / 0.04) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+
+  /* Command palette overlay */
+  .cmdk-overlay {
+    @apply fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm;
+  }
+
+  .cmdk-dialog {
+    @apply glass-panel fixed left-1/2 top-[18%] z-[101] w-full max-w-xl -translate-x-1/2
+      overflow-hidden shadow-glass-lg animate-scale-in;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-medical-cyan to-medical-indigo bg-clip-text text-transparent;
+  }
+
+  .ring-accent {
+    @apply ring-2 ring-medical-cyan/30;
+  }
+
+  /* Auth / login forms */
+  .login-form {
+    @apply flex flex-col gap-5;
+  }
+
+  .login-field {
+    @apply w-full rounded-lg border border-border bg-canvas-subtle/60 px-3 py-2.5 text-sm text-foreground
+      shadow-sm transition-colors
+      focus:outline-none focus:ring-2 focus:ring-medical-cyan/35 focus:border-medical-cyan/50;
+  }
+
+  .login-field:disabled {
+    @apply cursor-not-allowed opacity-60;
+  }
+
+  .login-error {
+    @apply rounded-lg border border-medical-rose/30 bg-medical-rose/10 px-3 py-2 text-sm text-medical-rose;
+  }
+}

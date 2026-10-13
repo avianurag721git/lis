@@ -1,0 +1,5 @@
+/**
+ * Monorepo entry: apps/web/src/index.css
+ * Canonical styles live in frontend/src/index.css
+ */
+@import "../../../frontend/src/index.css";

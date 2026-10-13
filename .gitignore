@@ -1,0 +1,84 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+
+# Secrets (NEVER commit actual secrets)
+secrets/*.txt
+!secrets/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory
+coverage/
+*.lcov
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Storage
+backend/storage/
+backend/.data/
+
+# Certificates
+nginx/certs/*.pem
+nginx/certs/*.key
+nginx/certs/*.crt
+
+# Credentials
+creds.txt
+*.pem
+*.key
+
+# Docker
+docker-compose.override.yml
+
+# E2E test artifacts
+test-results/
+playwright-report/
+playwright/.cache/

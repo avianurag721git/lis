@@ -1,0 +1,4 @@
+AI Prescription OCR Reader (Instant Doctor Slip Scanner)--. for this to happen an mobile application may be need because im not sure every lab can afford a separate machine for this 
+Self-Service Lobby Kiosk Mode (iPad / Tablet Interface)---> affordinga kisok can also act as a additonal cost can there be an application or web portal, whcih customer can access and move forward
+Voice-Driven Result Dictation & Hands-Free Entry--> lets say techinican is saying something so will this application be able to pcik the digits or tests or whatevver is said correctly, or there can be any uncertainity because this can cause some issuea as these are some serious problems 
+Zero-App PWA & Multilingual Audio Report Readout--. yes thats a better experience kind of thing but is it simple to use?
