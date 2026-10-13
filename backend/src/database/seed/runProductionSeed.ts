@@ -5,6 +5,7 @@ import { seedProductionTenants } from "./seedTenants";
 import { seedProductionCatalog } from "./seedCatalog";
 import { seedProductionClinical, seedCityLabsMinimal } from "./seedClinical";
 import { seedProductionInventoryQc } from "./seedInventoryQc";
+import { seedProductionExtended } from "./seedExtended";
 import { syncMongoProductionSeed } from "./seedMongo";
 import { seedProductionAuthUsers } from "../../modules/auth/productionUsers.seed";
 
@@ -33,6 +34,7 @@ export const runProductionSeed = async (options: RunProductionSeedOptions = {}):
   const catalog = await seedProductionCatalog(APOLLO_TENANT_ID);
   await seedProductionClinical(APOLLO_TENANT_ID, catalog, users);
   await seedProductionInventoryQc(APOLLO_TENANT_ID, users.labTech);
+  await seedProductionExtended(APOLLO_TENANT_ID, catalog, users);
   await seedCityLabsMinimal(CITYLABS_TENANT_ID);
   await syncMongoProductionSeed(users);
 
