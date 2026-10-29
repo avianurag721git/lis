@@ -206,7 +206,7 @@ export const LoginPage = (): JSX.Element => {
       <section className="login-panel">
         <motion.form
           className="login-card"
-          onSubmit={(e) => void handleSubmit(e)}
+          onSubmit={(e: FormEvent<HTMLFormElement>) => void handleSubmit(e)}
           aria-busy={submitting}
           initial={reduceMotion ? false : { opacity: 0, y: 28 }}
           animate={{ opacity: 1, y: 0 }}

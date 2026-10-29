@@ -137,10 +137,9 @@ export const LongitudinalTrajectory = ({ patientId, patientName }: Props): JSX.E
               <ReferenceArea
                 y1={primarySeries.referenceMin}
                 y2={primarySeries.referenceMax}
-                fill="#22c55e"
-                fillOpacity={0.12}
-                strokeOpacity={0}
                 label={{ value: "Normal range", position: "insideTopLeft", fill: "#16a34a", fontSize: 11 }}
+                // Recharts 3 SVG prop filtering omits fill from ReferenceArea typings; still applied at runtime.
+                {...({ fill: "#22c55e", fillOpacity: 0.12, strokeOpacity: 0 } as object)}
               />
             ) : null}
             {numericSeries

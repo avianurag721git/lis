@@ -1,7 +1,20 @@
-import { useState } from "react";
+import { useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
-import Barcode from "react-barcode";
+import ReactBarcode from "react-barcode";
 import { Printer, X } from "lucide-react";
+
+/** react-barcode class typings lag React 19 JSX element checks. */
+const Barcode = ReactBarcode as unknown as ComponentType<{
+  value: string;
+  format?: string;
+  width?: number;
+  height?: number;
+  displayValue?: boolean;
+  fontSize?: number;
+  margin?: number;
+  background?: string;
+  lineColor?: string;
+}>;
 import type { SampleDto } from "../orders/orders.service";
 import type { Patient } from "../../modules/patients/patients.service";
 import { formatPatientAge } from "../../utils/patientAge";
@@ -221,11 +234,11 @@ const printLabelPdf = async (source: HTMLElement, fileBase?: string): Promise<vo
   if (!win) {
     // Pop-up blocked — still give an exact-size file the user can print.
     doc.save(`${fileBase ?? "tube-labels"}-2x1.pdf`);
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(String(url));
     return;
   }
   win.focus();
-  window.setTimeout(() => URL.revokeObjectURL(url), 120000);
+  window.setTimeout(() => URL.revokeObjectURL(String(url)), 120000);
 };
 
 const printA4Sheet = (html: string): void => {
@@ -297,8 +310,8 @@ export const BarcodeStickerModal = ({ open, onClose, patient, samples, orderNumb
               await printBarcodeLabel({
                 barcode: s.barcode,
                 title: patient?.name ?? "Patient",
-                subtitle: orderNumber ? `Order ${orderNumber}` : undefined,
-                patientName: patient?.name,
+                ...(orderNumber ? { subtitle: `Order ${orderNumber}` } : {}),
+                ...(patient?.name ? { patientName: patient.name } : {}),
                 sampleType: `${s.sampleType} · ${s.tubeColor}`,
                 copies: 1
               });

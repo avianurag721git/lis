@@ -3,6 +3,7 @@ import { AppError } from "../../common/errors/AppError";
 import { HTTP_STATUS } from "../../common/constants/httpStatus";
 import { reagentService } from "./reagent.service";
 import { qcService } from "./qc.service";
+import { routeParam } from "../../common/http/routeParam";
 
 const ok = <T>(res: Response, data: T, status: number = HTTP_STATUS.OK): void => {
   res.status(status).json({ success: true, data });
@@ -31,7 +32,7 @@ export const createReagent = async (req: Request, res: Response, next: NextFunct
 export const updateReagent = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     if (!req.tenantId) throw new AppError("Tenant required", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
-    const reagent = await reagentService.update(req.tenantId, req.params.reagentId!, req.body);
+    const reagent = await reagentService.update(req.tenantId, routeParam(req.params.reagentId)!, req.body);
     ok(res, { reagent });
   } catch (err) {
     next(err);
@@ -114,7 +115,7 @@ export const resolveQcHold = async (req: Request, res: Response, next: NextFunct
       throw new AppError("Auth/tenant required", HTTP_STATUS.BAD_REQUEST, "CONTEXT_REQUIRED");
     }
     const calibrationPass = Boolean(req.body?.calibrationPass ?? true);
-    const hold = await qcService.resolveHold(req.tenantId, req.authUser.userId, req.params.holdId!, {
+    const hold = await qcService.resolveHold(req.tenantId, req.authUser.userId, routeParam(req.params.holdId)!, {
       calibrationPass
     });
     ok(res, { hold });

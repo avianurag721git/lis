@@ -3,9 +3,13 @@ import { pathologistApi } from "../../features/pathologist/pathologist.service";
 import { samplesApi } from "../../features/samples/samples.service";
 import { inventoryApi } from "../../features/inventory/inventory.service";
 import { labResultsApi } from "../../features/results/labResults.service";
+import { useAuth } from "../../modules/auth/auth.context";
 import type { SidebarBadgeKey } from "./sidebarNav.config";
 
-export type SidebarBadges = Record<SidebarBadgeKey, { count?: number; label?: string; tone?: "default" | "warning" | "danger" }>;
+export type SidebarBadges = Record<
+  SidebarBadgeKey,
+  { count?: number; label?: string; tone?: "default" | "warning" | "danger" }
+>;
 
 const emptyBadges = (): SidebarBadges => ({
   pathologist: { count: 0 },
@@ -14,29 +18,46 @@ const emptyBadges = (): SidebarBadges => ({
   resultEntry: { count: 0 }
 });
 
+/** Only poll badge endpoints the current role is allowed to call — avoids 403 spam. */
 export const useSidebarBadges = (): SidebarBadges => {
+  const { hasPermission, isAuthenticated } = useAuth();
+
+  const canPathologist = isAuthenticated && hasPermission("PATHOLOGIST_VERIFY");
+  const canSamples =
+    isAuthenticated && (hasPermission("SAMPLE_RECEIVE") || hasPermission("SAMPLE_COLLECT"));
+  const canReagents = isAuthenticated && hasPermission("REAGENT_MANAGE");
+  const canResultEntry = isAuthenticated && hasPermission("RESULT_ENTRY");
+
   const { data: pathQueue = [] } = useQuery({
     queryKey: ["sidebar-badge-pathologist"],
     queryFn: () => pathologistApi.queue(),
-    refetchInterval: 60_000
+    enabled: canPathologist,
+    refetchInterval: canPathologist ? 60_000 : false,
+    retry: false
   });
 
   const { data: samples = [] } = useQuery({
     queryKey: ["sidebar-badge-samples"],
     queryFn: () => samplesApi.list(),
-    refetchInterval: 60_000
+    enabled: canSamples,
+    refetchInterval: canSamples ? 60_000 : false,
+    retry: false
   });
 
   const { data: reagents = [] } = useQuery({
     queryKey: ["sidebar-badge-reagents"],
     queryFn: () => inventoryApi.listReagents(),
-    refetchInterval: 120_000
+    enabled: canReagents,
+    refetchInterval: canReagents ? 120_000 : false,
+    retry: false
   });
 
   const { data: pendingResults = [] } = useQuery({
     queryKey: ["sidebar-badge-pending-results"],
     queryFn: () => labResultsApi.pending(),
-    refetchInterval: 60_000
+    enabled: canResultEntry,
+    refetchInterval: canResultEntry ? 60_000 : false,
+    retry: false
   });
 
   const receivingCount = samples.filter((s) => s.status === "IN_TRANSIT" || s.status === "COLLECTED").length;
@@ -51,8 +72,8 @@ export const useSidebarBadges = (): SidebarBadges => {
   return {
     ...emptyBadges(),
     pathologist: { count: pathQueue.length, tone: pathQueue.length > 0 ? "warning" : "default" },
-    labReceiving: { count: receivingCount, tone: receivingCount > 0 ? "default" : "default" },
+    labReceiving: { count: receivingCount },
     reagentsLow: reagentsLowBadge,
-    resultEntry: { count: pendingResults.length, tone: pendingResults.length > 0 ? "default" : "default" }
+    resultEntry: { count: pendingResults.length }
   };
 };

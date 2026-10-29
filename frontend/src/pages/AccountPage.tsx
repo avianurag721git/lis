@@ -44,7 +44,7 @@ export const AccountPage = (): JSX.Element => {
             userId: user.userId,
             email: user.email,
             role: user.role,
-            name: user.name
+            ...(user.name ? { name: user.name } : {})
           });
         } else {
           setError("Unable to load profile.");

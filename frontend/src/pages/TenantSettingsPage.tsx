@@ -1,7 +1,14 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useTenant } from "../modules/tenant/tenant.context";
 import { tenantConfigApi } from "../modules/tenant/tenantConfig.api";
-import { defaultBranding, defaultFinance } from "../modules/tenant/tenant.types";
+import { ReportLayoutEditor } from "../modules/tenant/ReportLayoutEditor";
+import {
+  defaultBranding,
+  defaultFinance,
+  defaultReportLayout,
+  parseReportLayout,
+  type ReportLayoutConfig
+} from "../modules/tenant/tenant.types";
 import { formatLabelKey } from "../utils/formatLabel";
 
 export const TenantSettingsPage = (): JSX.Element => {
@@ -15,6 +22,15 @@ export const TenantSettingsPage = (): JSX.Element => {
   const [primaryColor, setPrimaryColor] = useState(brand.primaryColor);
   const [secondaryColor, setSecondaryColor] = useState(brand.secondaryColor);
   const [logoUrl, setLogoUrl] = useState(brand.logoUrl ?? "");
+  const [phone, setPhone] = useState(brand.phone);
+  const [email, setEmail] = useState(brand.email);
+  const [website, setWebsite] = useState(brand.website);
+  const [accreditationLine, setAccreditationLine] = useState(brand.accreditationLine);
+  const [processedAtLabel, setProcessedAtLabel] = useState(brand.processedAtLabel);
+  const [reportDisclaimer, setReportDisclaimer] = useState(brand.reportDisclaimer);
+  const [reportLayout, setReportLayout] = useState<ReportLayoutConfig>(
+    () => parseReportLayout(brand.reportLayout ?? defaultReportLayout())
+  );
   const [reportTemplate, setReportTemplate] = useState<"STANDARD" | "DETAILED">(
     config?.reportTemplate ?? "STANDARD"
   );
@@ -33,12 +49,19 @@ export const TenantSettingsPage = (): JSX.Element => {
     if (!config) return;
     setBrandingName(config.brandingName ?? "");
     setReportTemplate(config.reportTemplate ?? "STANDARD");
-    const b = config.branding ?? defaultBranding();
+    const b = { ...defaultBranding(), ...(config.branding ?? {}) };
     setLabAddress(b.labHeaderAddress);
     setNablRegNo(b.nablRegNo);
     setPrimaryColor(b.primaryColor);
     setSecondaryColor(b.secondaryColor);
     setLogoUrl(b.logoUrl ?? "");
+    setPhone(b.phone ?? "");
+    setEmail(b.email ?? "");
+    setWebsite(b.website ?? "");
+    setAccreditationLine(b.accreditationLine ?? "");
+    setProcessedAtLabel(b.processedAtLabel ?? "");
+    setReportDisclaimer(b.reportDisclaimer ?? defaultBranding().reportDisclaimer);
+    setReportLayout(parseReportLayout(b.reportLayout ?? defaultReportLayout()));
     const f = config.finance ?? defaultFinance();
     setDefaultGstPercent(f.defaultGstPercent);
     setLabGstin(f.labGstin);
@@ -62,7 +85,16 @@ export const TenantSettingsPage = (): JSX.Element => {
           primaryColor,
           secondaryColor,
           labHeaderAddress: labAddress,
-          nablRegNo
+          nablRegNo,
+          phone: phone.trim(),
+          email: email.trim(),
+          website: website.trim(),
+          showNablBadge: reportLayout.header.fields.find((f) => f.id === "nablBadge")?.enabled ?? true,
+          showNabhBadge: reportLayout.header.fields.find((f) => f.id === "nabhBadge")?.enabled ?? false,
+          accreditationLine: accreditationLine.trim(),
+          processedAtLabel: processedAtLabel.trim(),
+          reportDisclaimer: reportDisclaimer.trim(),
+          reportLayout
         },
         finance: {
           defaultGstPercent: Number(defaultGstPercent) || 0,
@@ -73,7 +105,7 @@ export const TenantSettingsPage = (): JSX.Element => {
         }
       });
       await refreshConfig();
-      setMessage("Tenant configuration saved. New bills will use these finance defaults.");
+      setMessage("Tenant configuration saved. New bills and reports will use these defaults.");
     } catch {
       setError("Could not save configuration. You need Manager / Tenant Admin access.");
     } finally {
@@ -86,7 +118,8 @@ export const TenantSettingsPage = (): JSX.Element => {
       <div className="page-head">
         <h1 className="page-title">Tenant configuration</h1>
         <p className="page-subtitle">
-          Organization branding, GST / finance defaults, and subscription — ERP-style settings for this lab.
+          Organization branding, lab report layout, GST / finance defaults, and subscription — ERP-style settings for
+          this lab.
         </p>
       </div>
 
@@ -173,8 +206,28 @@ export const TenantSettingsPage = (): JSX.Element => {
               <input value={labAddress} onChange={(e) => setLabAddress(e.target.value)} />
             </label>
             <label className="form-label">
+              Phone
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91-…" />
+            </label>
+            <label className="form-label">
+              Email
+              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="reports@lab.com" />
+            </label>
+            <label className="form-label">
+              Website
+              <input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://…" />
+            </label>
+            <label className="form-label">
               NABL registration no.
               <input value={nablRegNo} onChange={(e) => setNablRegNo(e.target.value)} />
+            </label>
+            <label className="form-label">
+              Processed-at label (lab code)
+              <input
+                value={processedAtLabel}
+                onChange={(e) => setProcessedAtLabel(e.target.value)}
+                placeholder="e.g. LC93"
+              />
             </label>
             <label className="form-label">
               Primary color
@@ -190,11 +243,32 @@ export const TenantSettingsPage = (): JSX.Element => {
                 value={reportTemplate}
                 onChange={(e) => setReportTemplate(e.target.value as "STANDARD" | "DETAILED")}
               >
-                <option value="STANDARD">Standard</option>
-                <option value="DETAILED">Detailed</option>
+                <option value="STANDARD">Standard (core clinical layout)</option>
+                <option value="DETAILED">Detailed (notes + signature image)</option>
               </select>
             </label>
+            <label className="form-label" style={{ gridColumn: "1 / -1" }}>
+              Accreditation line
+              <input
+                value={accreditationLine}
+                onChange={(e) => setAccreditationLine(e.target.value)}
+                placeholder="NABL Accredited · ISO 15189:2022 Compliant"
+              />
+            </label>
+            <label className="form-label" style={{ gridColumn: "1 / -1" }}>
+              Report disclaimer (footer)
+              <textarea
+                value={reportDisclaimer}
+                onChange={(e) => setReportDisclaimer(e.target.value)}
+                rows={3}
+              />
+            </label>
           </div>
+        </div>
+
+        <div className="card" style={{ marginTop: 16 }}>
+          <h2 className="card-title">Lab report layout</h2>
+          <ReportLayoutEditor value={reportLayout} onChange={setReportLayout} />
         </div>
 
         {error ? <p className="status-error">{error}</p> : null}

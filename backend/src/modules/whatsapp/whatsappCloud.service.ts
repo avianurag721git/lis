@@ -82,7 +82,7 @@ export const whatsappCloudService = {
     form.append("messaging_product", "whatsapp");
     form.append(
       "file",
-      new Blob([pdfBuffer], { type: "application/pdf" }),
+      new Blob([new Uint8Array(pdfBuffer)], { type: "application/pdf" }),
       filename.endsWith(".pdf") ? filename : `${filename}.pdf`
     );
     form.append("type", "application/pdf");

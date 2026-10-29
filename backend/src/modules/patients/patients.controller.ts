@@ -3,6 +3,7 @@ import { AppError } from "../../common/errors/AppError";
 import { HTTP_STATUS } from "../../common/constants/httpStatus";
 import { patientsRepository } from "./patients.repository";
 import { patientsLongitudinalService } from "./patientsLongitudinal.service";
+import { routeParam } from "../../common/http/routeParam";
 
 const ok = <T>(res: Response, data: T, status: number = HTTP_STATUS.OK): void => {
   res.status(status).json({ success: true, data });
@@ -26,7 +27,7 @@ export const getLongitudinalHistory = async (req: Request, res: Response, next: 
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const patientId = req.params.patientId;
+    const patientId = routeParam(req.params.patientId);
     if (!patientId) {
       throw new AppError("patientId is required", HTTP_STATUS.BAD_REQUEST, "PATIENT_ID_REQUIRED");
     }
@@ -42,7 +43,7 @@ export const getPatient = async (req: Request, res: Response, next: NextFunction
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const patientId = req.params.patientId;
+    const patientId = routeParam(req.params.patientId);
     if (!patientId) {
       throw new AppError("patientId is required", HTTP_STATUS.BAD_REQUEST, "PATIENT_ID_REQUIRED");
     }
@@ -90,7 +91,7 @@ export const updatePatient = async (req: Request, res: Response, next: NextFunct
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const patientId = req.params.patientId;
+    const patientId = routeParam(req.params.patientId);
     if (!patientId) {
       throw new AppError("patientId is required", HTTP_STATUS.BAD_REQUEST, "PATIENT_ID_REQUIRED");
     }

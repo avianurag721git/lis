@@ -87,7 +87,7 @@ export const websocketAgentPrinter = {
               })
             );
           } else {
-            ws.send(payload);
+            ws.send(Uint8Array.from(payload));
           }
         } catch (err) {
           fail(

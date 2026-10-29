@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { HTTP_STATUS } from "../../common/constants/httpStatus";
 import { usersService } from "./users.service";
+import { routeParam } from "../../common/http/routeParam";
 
 const ok = <T>(res: Response, data: T, status: number = HTTP_STATUS.OK): void => {
   res.status(status).json({ success: true, data });
@@ -30,7 +31,7 @@ export const patchUserPermissionsHandler = async (
     }
     const user = await usersService.updatePermissions({
       tenantId: req.tenantId,
-      targetUserId: req.params.userId as string,
+      targetUserId: routeParam(req.params.userId) as string,
       permissions: req.body.permissions,
       modifiedByUserId: req.authUser.userId
     });
@@ -42,7 +43,7 @@ export const patchUserPermissionsHandler = async (
 
 export const getRoleDefaultsHandler = (req: Request, res: Response, next: NextFunction): void => {
   try {
-    ok(res, { role: req.params.role, permissions: usersService.roleDefaults(req.params.role as string) });
+    ok(res, { role: routeParam(req.params.role), permissions: usersService.roleDefaults(routeParam(req.params.role) as string) });
   } catch (err) {
     next(err);
   }

@@ -24,7 +24,23 @@ export const updateTenantConfigSchema = z.object({
         primaryColor: z.string().trim().min(4).max(32).optional(),
         secondaryColor: z.string().trim().min(4).max(32).optional(),
         labHeaderAddress: z.string().trim().max(500).optional(),
-        nablRegNo: z.string().trim().max(80).optional()
+        nablRegNo: z.string().trim().max(80).optional(),
+        phone: z.string().trim().max(40).optional(),
+        email: z.string().trim().max(120).optional(),
+        website: z.string().trim().max(200).optional(),
+        showNablBadge: z.boolean().optional(),
+        showNabhBadge: z.boolean().optional(),
+        accreditationLine: z.string().trim().max(300).optional(),
+        processedAtLabel: z.string().trim().max(80).optional(),
+        reportDisclaimer: z.string().trim().max(1000).optional(),
+        reportLayout: z
+          .object({
+            header: z.unknown().optional(),
+            patient: z.unknown().optional(),
+            footer: z.unknown().optional()
+          })
+          .passthrough()
+          .optional()
       })
       .optional(),
     settings: z

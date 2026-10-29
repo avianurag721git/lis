@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { authService } from "./auth.service";
 import { AuthUser, LoginResponse } from "./auth.types";
 import { hasPermission as checkPermission, Permission, resolveEffectivePermissions } from "./permissions";
@@ -13,6 +14,7 @@ type LoginInput = {
 type AuthContextValue = {
   user: AuthUser | null;
   isAuthenticated: boolean;
+  isLoggingOut: boolean;
   hasPermission: (perm: Permission) => boolean;
   login: (payload: LoginInput) => Promise<AuthUser>;
   logout: () => Promise<void>;
@@ -42,6 +44,7 @@ type Props = {
 
 export const AuthProvider = ({ children }: Props): JSX.Element => {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const refreshProfile = useCallback(async (): Promise<void> => {
     if (!tokenService.getAccessToken()) {
@@ -92,6 +95,7 @@ export const AuthProvider = ({ children }: Props): JSX.Element => {
     () => ({
       user,
       isAuthenticated: Boolean(user && tokenService.getAccessToken()),
+      isLoggingOut,
       hasPermission,
       async login(payload: LoginInput) {
         const response = await authService.login(payload);
@@ -104,19 +108,34 @@ export const AuthProvider = ({ children }: Props): JSX.Element => {
         return mapped;
       },
       async logout() {
+        if (isLoggingOut) return;
+        setIsLoggingOut(true);
         try {
           await authService.logout();
         } finally {
           tokenService.clear();
           setUser(null);
+          setIsLoggingOut(false);
         }
       },
       refreshProfile
     }),
-    [user, hasPermission, refreshProfile]
+    [user, isLoggingOut, hasPermission, refreshProfile]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      {isLoggingOut ? (
+        <div className="logout-overlay" role="status" aria-live="polite" aria-busy="true">
+          <div className="logout-overlay__card">
+            <Loader2 className="spin" size={22} aria-hidden />
+            <span>Signing out…</span>
+          </div>
+        </div>
+      ) : null}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = (): AuthContextValue => {

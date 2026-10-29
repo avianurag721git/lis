@@ -1,9 +1,22 @@
+import type { ReportLayoutConfig } from "../saas/reportLayout.types";
+
+export type { ReportLayoutConfig } from "../saas/reportLayout.types";
+
 export type TenantBranding = {
   logoUrl: string | null;
   primaryColor: string;
   secondaryColor: string;
   labHeaderAddress: string;
   nablRegNo: string;
+  phone: string;
+  email: string;
+  website: string;
+  showNablBadge: boolean;
+  showNabhBadge: boolean;
+  accreditationLine: string;
+  processedAtLabel: string;
+  reportDisclaimer: string;
+  reportLayout: ReportLayoutConfig;
 };
 
 export type TenantSettings = {

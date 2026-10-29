@@ -87,7 +87,7 @@ export const startAnalyzerSocketServer = (): net.Server | null => {
 
     socket.on("data", (chunk) => {
       clearIdle();
-      const framed = mllp.push(chunk);
+      const framed = mllp.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       for (const msg of framed) {
         void handleMessage(msg);
       }

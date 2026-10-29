@@ -5,6 +5,7 @@ import { HTTP_STATUS } from "../../common/constants/httpStatus";
 import { env } from "../../config/env";
 import { validate } from "../../common/middleware/validate.middleware";
 import { kioskService, smartReportService } from "./kiosk.service";
+import { routeParam } from "../../common/http/routeParam";
 
 const resolvePublicTenant = (req: Request): string => {
   const fromHeader = req.header("x-tenant-id")?.trim();
@@ -70,7 +71,7 @@ export const magicReportSchema = validate(
 
 export const getMagicReport = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const report = await smartReportService.resolveMagicLink(req.params.token as string);
+    const report = await smartReportService.resolveMagicLink(routeParam(req.params.token) as string);
     res.status(HTTP_STATUS.OK).json({ success: true, data: report });
   } catch (err) {
     next(err);
@@ -82,7 +83,7 @@ export const createMagicLink = async (req: Request, res: Response, next: NextFun
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const orderId = req.params.orderId as string;
+    const orderId = routeParam(req.params.orderId) as string;
     const link = await smartReportService.createMagicLink(req.tenantId, orderId);
     res.status(HTTP_STATUS.CREATED).json({ success: true, data: link });
   } catch (err) {

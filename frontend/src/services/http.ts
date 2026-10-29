@@ -7,7 +7,8 @@ export const SESSION_EXPIRED_EVENT = "diaglab:session-expired";
 
 export const httpClient = axios.create({
   baseURL: env.apiUrl,
-  timeout: 10000,
+  // Neon / cold paths can exceed 10s; billing create-invoice was aborting at exactly 10s.
+  timeout: 30_000,
   withCredentials: true,
   headers: {
     "Content-Type": "application/json"

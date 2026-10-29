@@ -1,8 +1,8 @@
 import { db } from "../postgres";
 import { seedLog } from "./seedLogger";
-import { APOLLO_TENANT_ID, CITYLABS_TENANT_ID } from "./productionSeed.constants";
+import { APOLLO_TENANT_ID, CITYLABS_TENANT_ID, DEMO_TENANT_ID } from "./productionSeed.constants";
 
-const SEED_TENANTS = [APOLLO_TENANT_ID, CITYLABS_TENANT_ID];
+const SEED_TENANTS = [APOLLO_TENANT_ID, CITYLABS_TENANT_ID, DEMO_TENANT_ID];
 
 /** Delete tenant-scoped transactional data (preserves saas_tenants rows). */
 export const clearProductionSeedData = async (): Promise<void> => {

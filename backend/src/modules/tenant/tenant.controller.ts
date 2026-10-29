@@ -3,6 +3,7 @@ import { HTTP_STATUS } from "../../common/constants/httpStatus";
 import { AppError } from "../../common/errors/AppError";
 import { saasContextService } from "../saas/saasContext.service";
 import { saasTenantRepository } from "../saas/saasTenant.repository";
+import { parseReportLayout } from "../saas/reportLayout.types";
 import { auditService } from "../audit/audit.service";
 import { tenantService } from "./tenant.service";
 
@@ -42,7 +43,12 @@ export const updateTenantConfig = async (req: Request, res: Response, next: Next
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
     const role = req.authUser?.role;
-    if (role !== "SUPER_ADMIN" && role !== "TENANT_ADMIN" && role !== "MANAGER") {
+    if (
+      role !== "SUPER_ADMIN" &&
+      role !== "TENANT_ADMIN" &&
+      role !== "MANAGER" &&
+      role !== "LAB_MANAGER"
+    ) {
       throw new AppError("Only lab managers can update tenant configuration", HTTP_STATUS.FORBIDDEN, "FORBIDDEN");
     }
 
@@ -83,7 +89,37 @@ export const updateTenantConfig = async (req: Request, res: Response, next: Next
               ...(typeof body.branding.labHeaderAddress === "string"
                 ? { labHeaderAddress: body.branding.labHeaderAddress }
                 : {}),
-              ...(typeof body.branding.nablRegNo === "string" ? { nablRegNo: body.branding.nablRegNo } : {})
+              ...(typeof body.branding.nablRegNo === "string" ? { nablRegNo: body.branding.nablRegNo } : {}),
+              ...(typeof body.branding.phone === "string" ? { phone: body.branding.phone } : {}),
+              ...(typeof body.branding.email === "string" ? { email: body.branding.email } : {}),
+              ...(typeof body.branding.website === "string" ? { website: body.branding.website } : {}),
+              ...(typeof body.branding.showNablBadge === "boolean"
+                ? { showNablBadge: body.branding.showNablBadge }
+                : {}),
+              ...(typeof body.branding.showNabhBadge === "boolean"
+                ? { showNabhBadge: body.branding.showNabhBadge }
+                : {}),
+              ...(typeof body.branding.accreditationLine === "string"
+                ? { accreditationLine: body.branding.accreditationLine }
+                : {}),
+              ...(typeof body.branding.processedAtLabel === "string"
+                ? { processedAtLabel: body.branding.processedAtLabel }
+                : {}),
+              ...(typeof body.branding.reportDisclaimer === "string"
+                ? { reportDisclaimer: body.branding.reportDisclaimer }
+                : {}),
+              ...(body.branding.reportLayout && typeof body.branding.reportLayout === "object"
+                ? (() => {
+                    const reportLayout = parseReportLayout(body.branding.reportLayout);
+                    const nabl = reportLayout.header.fields.find((f) => f.id === "nablBadge");
+                    const nabh = reportLayout.header.fields.find((f) => f.id === "nabhBadge");
+                    return {
+                      reportLayout,
+                      ...(nabl ? { showNablBadge: nabl.enabled } : {}),
+                      ...(nabh ? { showNabhBadge: nabh.enabled } : {})
+                    };
+                  })()
+                : {})
             }
           }
         : {}),

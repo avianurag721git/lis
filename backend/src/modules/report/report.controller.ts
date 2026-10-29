@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { AppError } from "../../common/errors/AppError";
 import { HTTP_STATUS } from "../../common/constants/httpStatus";
+import { routeParam } from "../../common/http/routeParam";
 import { reportService } from "./report.service";
 import { tenantService } from "../tenant/tenant.service";
 import { reportTemplatesService } from "./reportTemplates.service";
@@ -85,7 +86,7 @@ export const downloadReport = (req: Request, res: Response, next: NextFunction):
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const { reportId } = req.params;
+    const reportId = routeParam(req.params.reportId);
     if (!reportId) {
       throw new AppError("Report id is required", HTTP_STATUS.BAD_REQUEST, "REPORT_ID_REQUIRED");
     }
@@ -101,7 +102,7 @@ export const getReportStatus = (req: Request, res: Response, next: NextFunction)
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const { reportId } = req.params;
+    const reportId = routeParam(req.params.reportId);
     if (!reportId) {
       throw new AppError("Report id is required", HTTP_STATUS.BAD_REQUEST, "REPORT_ID_REQUIRED");
     }

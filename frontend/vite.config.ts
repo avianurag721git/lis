@@ -1,6 +1,10 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig, type ProxyOptions } from "vite";
 import react from "@vitejs/plugin-react";
 import type { IncomingMessage } from "node:http";
+
+const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const apiTarget = "http://127.0.0.1:5000";
 
@@ -65,10 +69,18 @@ export default defineConfig({
   css: {
     postcss: "./postcss.config.js"
   },
+  resolve: {
+    // Monorepo + peer deps can nest React 18 next to React 19 — force one copy.
+    dedupe: ["react", "react-dom"],
+    alias: {
+      react: path.resolve(frontendRoot, "../node_modules/react"),
+      "react-dom": path.resolve(frontendRoot, "../node_modules/react-dom")
+    }
+  },
   optimizeDeps: {
     // jspdf is lazy-loaded; keep it out of prebundle so optional html2canvas
     // does not block Vite dep optimization / SPA boot.
-    include: ["react-barcode"],
+    include: ["react", "react-dom", "react-barcode"],
     exclude: ["jspdf"]
   },
   server: {

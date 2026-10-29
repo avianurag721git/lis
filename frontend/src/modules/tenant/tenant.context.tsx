@@ -13,6 +13,7 @@ import {
   TenantSaas,
   applyBrandingCssVars,
   defaultBranding,
+  parseReportLayout,
   resolveSubdomain
 } from "./tenant.types";
 
@@ -75,10 +76,14 @@ export const TenantProvider = ({ children }: Props): JSX.Element => {
     void refreshConfig();
   }, [refreshConfig]);
 
-  const branding = useMemo(
-    () => config?.branding ?? publicBranding ?? defaultBranding(),
-    [config, publicBranding]
-  );
+  const branding = useMemo(() => {
+    const raw = config?.branding ?? publicBranding ?? defaultBranding();
+    return {
+      ...defaultBranding(),
+      ...raw,
+      reportLayout: parseReportLayout(raw.reportLayout)
+    };
+  }, [config, publicBranding]);
 
   useEffect(() => {
     applyBrandingCssVars(branding);

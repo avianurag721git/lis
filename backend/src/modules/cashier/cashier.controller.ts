@@ -4,6 +4,7 @@ import { AppError } from "../../common/errors/AppError";
 import { HTTP_STATUS } from "../../common/constants/httpStatus";
 import { UserRole } from "../auth/auth.types";
 import { cashierService } from "./cashier.service";
+import { routeParam } from "../../common/http/routeParam";
 
 const ok = <T>(res: Response, data: T, status: number = HTTP_STATUS.OK): void => {
   res.status(status).json({ success: true, data });
@@ -24,7 +25,7 @@ export const listCashierQueue = async (req: Request, res: Response, next: NextFu
 export const getCashierBill = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     if (!req.tenantId) throw new AppError("Tenant required", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
-    const bill = await cashierService.getBill(req.tenantId, req.params.orderId!, roleOf(req));
+    const bill = await cashierService.getBill(req.tenantId, routeParam(req.params.orderId)!, roleOf(req));
     ok(res, { bill });
   } catch (err) {
     next(err);
@@ -37,7 +38,7 @@ export const adjustCashierBill = async (req: Request, res: Response, next: NextF
       throw new AppError("Auth/tenant required", HTTP_STATUS.BAD_REQUEST, "CONTEXT_REQUIRED");
     }
     const bill = await cashierService.adjustItems(req.tenantId, req.authUser.userId, roleOf(req), {
-      orderId: req.params.orderId!,
+      orderId: routeParam(req.params.orderId)!,
       ...req.body
     });
     ok(res, { bill });
@@ -55,7 +56,7 @@ export const createCashierInvoice = async (req: Request, res: Response, next: Ne
       req.tenantId,
       req.authUser.userId,
       roleOf(req),
-      req.params.orderId!,
+      routeParam(req.params.orderId)!,
       req.body
     );
     ok(res, result, HTTP_STATUS.CREATED);
@@ -70,7 +71,7 @@ export const collectCashierPayment = async (req: Request, res: Response, next: N
       throw new AppError("Auth/tenant required", HTTP_STATUS.BAD_REQUEST, "CONTEXT_REQUIRED");
     }
     const result = await cashierService.collectPayment(req.tenantId, req.authUser.userId, roleOf(req), {
-      orderId: req.params.orderId!,
+      orderId: routeParam(req.params.orderId)!,
       ...req.body
     });
     ok(res, result);
@@ -82,7 +83,7 @@ export const collectCashierPayment = async (req: Request, res: Response, next: N
 export const listCashierPayments = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     if (!req.tenantId) throw new AppError("Tenant required", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
-    const payments = await cashierService.listPayments(req.tenantId, req.params.orderId!);
+    const payments = await cashierService.listPayments(req.tenantId, routeParam(req.params.orderId)!);
     ok(res, { payments });
   } catch (err) {
     next(err);
@@ -92,7 +93,7 @@ export const listCashierPayments = async (req: Request, res: Response, next: Nex
 export const downloadCashierInvoice = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     if (!req.tenantId) throw new AppError("Tenant required", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
-    const { filePath, fileName } = await cashierService.getInvoicePdfPath(req.tenantId, req.params.orderId!);
+    const { filePath, fileName } = await cashierService.getInvoicePdfPath(req.tenantId, routeParam(req.params.orderId)!);
     const buf = await fs.promises.readFile(filePath);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);

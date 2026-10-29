@@ -168,7 +168,7 @@ export const SIDEBAR_NAV_GROUPS: SidebarNavGroup[] = [
       },
       {
         to: "/settings/tenant",
-        label: "Tenant Configuration",
+        label: "Tenant & Report Layout",
         icon: Building2,
         requiredPermission: "SETTINGS_MANAGE"
       },

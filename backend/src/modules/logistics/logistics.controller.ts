@@ -4,6 +4,7 @@ import { AppError } from "../../common/errors/AppError";
 import { HTTP_STATUS } from "../../common/constants/httpStatus";
 import { validate } from "../../common/middleware/validate.middleware";
 import { logisticsService } from "./logistics.service";
+import { routeParam } from "../../common/http/routeParam";
 
 export const startTripSchema = validate(
   z.object({
@@ -55,7 +56,7 @@ export const completeTrip = async (req: Request, res: Response, next: NextFuncti
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const trip = await logisticsService.completeTrip(req.tenantId, req.params.tripId as string);
+    const trip = await logisticsService.completeTrip(req.tenantId, routeParam(req.params.tripId) as string);
     res.status(HTTP_STATUS.OK).json({ success: true, data: { trip } });
   } catch (err) {
     next(err);
@@ -79,7 +80,7 @@ export const getTripByOrder = async (req: Request, res: Response, next: NextFunc
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const trip = await logisticsService.getTripByOrder(req.tenantId, req.params.orderId as string);
+    const trip = await logisticsService.getTripByOrder(req.tenantId, routeParam(req.params.orderId) as string);
     res.status(HTTP_STATUS.OK).json({ success: true, data: { trip } });
   } catch (err) {
     next(err);
@@ -88,7 +89,7 @@ export const getTripByOrder = async (req: Request, res: Response, next: NextFunc
 
 export const getPublicTrack = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const track = await logisticsService.getPublicTrack(req.params.bookingId as string);
+    const track = await logisticsService.getPublicTrack(routeParam(req.params.bookingId) as string);
     res.status(HTTP_STATUS.OK).json({ success: true, data: track });
   } catch (err) {
     next(err);

@@ -177,7 +177,7 @@ export const billingApi = {
         message: string;
         alreadySettled?: boolean;
       }>
-    >("/billing/create-invoice", payload);
+    >("/billing/create-invoice", payload, { timeout: 60_000 });
     return data.data;
   },
 

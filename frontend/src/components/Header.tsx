@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { LogOut, Menu, Search } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
 import { ThemeToggle } from "./ThemeToggle";
+import { ButtonSpinner } from "./ButtonSpinner";
 import { useAuth } from "../modules/auth/auth.context";
 import { useTenant } from "../modules/tenant/tenant.context";
 import { formatRoleLabel } from "../utils/roleLabels";
@@ -14,11 +15,15 @@ type HeaderProps = {
 
 export const Header = ({ onOpenCommand, onOpenNav }: HeaderProps): JSX.Element => {
   const { config, saas, branding } = useTenant();
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, isLoggingOut, hasPermission } = useAuth();
   const [analyzerOnline, setAnalyzerOnline] = useState<boolean | null>(null);
+  const canSeeAnalyzer = isAuthenticated && hasPermission("QC_MANAGE");
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!canSeeAnalyzer) {
+      setAnalyzerOnline(null);
+      return;
+    }
     let cancelled = false;
     const poll = async (): Promise<void> => {
       try {
@@ -34,7 +39,7 @@ export const Header = ({ onOpenCommand, onOpenNav }: HeaderProps): JSX.Element =
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [isAuthenticated]);
+  }, [canSeeAnalyzer]);
 
   const labTitle = config?.brandingName ?? "Diagnostic Lab Management System";
   const logoUrl = branding.logoUrl ?? config?.logoUrl;
@@ -118,11 +123,19 @@ export const Header = ({ onOpenCommand, onOpenNav }: HeaderProps): JSX.Element =
                 type="button"
                 className="btn btn-secondary btn-sm header-logout"
                 onClick={() => void logout()}
+                disabled={isLoggingOut}
+                aria-busy={isLoggingOut}
                 title="Sign out"
-                aria-label="Sign out"
+                aria-label={isLoggingOut ? "Signing out" : "Sign out"}
               >
-                <LogOut size={16} aria-hidden />
-                <span className="header-logout-label">Sign out</span>
+                {isLoggingOut ? (
+                  <ButtonSpinner label="Sign out" loadingLabel="Signing out…" loading size={14} />
+                ) : (
+                  <>
+                    <LogOut size={16} aria-hidden />
+                    <span className="header-logout-label">Sign out</span>
+                  </>
+                )}
               </button>
             </div>
           ) : null}

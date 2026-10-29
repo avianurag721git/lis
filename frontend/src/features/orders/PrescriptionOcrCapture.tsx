@@ -64,15 +64,15 @@ export const PrescriptionOcrCapture = ({ onApply }: Props): JSX.Element => {
   };
 
   return (
-    <div className="rounded-xl border border-dashed border-primary/40 bg-primary/5 p-4 space-y-3">
-      <div className="flex items-center gap-2 text-sm font-medium">
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground flex items-center gap-2">
         <ScanLine className="h-4 w-4 text-primary" aria-hidden />
-        Scan prescription (camera or upload — no scanner needed)
-      </div>
+        Camera or upload — no scanner needed
+      </p>
 
       <div
         className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-          dragOver ? "border-primary bg-primary/10" : "border-border/60"
+          dragOver ? "border-primary bg-primary/10" : "border-border/60 bg-primary/5"
         }`}
         onDragOver={(e) => {
           e.preventDefault();

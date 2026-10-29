@@ -3,6 +3,7 @@ import { AppError } from "../../common/errors/AppError";
 import { HTTP_STATUS } from "../../common/constants/httpStatus";
 import { catalogRepository } from "./catalog.repository";
 import { evaluateFormula } from "../lab-results/formula.engine";
+import { routeParam } from "../../common/http/routeParam";
 
 export const listDepartments = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -33,7 +34,7 @@ export const listTestsForDepartment = async (req: Request, res: Response, next: 
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const departmentId = req.params.departmentId;
+    const departmentId = routeParam(req.params.departmentId);
     if (!departmentId) {
       throw new AppError("departmentId is required", HTTP_STATUS.BAD_REQUEST, "DEPARTMENT_ID_REQUIRED");
     }
@@ -49,7 +50,7 @@ export const createTest = async (req: Request, res: Response, next: NextFunction
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const departmentId = req.params.departmentId;
+    const departmentId = routeParam(req.params.departmentId);
     if (!departmentId) {
       throw new AppError("departmentId is required", HTTP_STATUS.BAD_REQUEST, "DEPARTMENT_ID_REQUIRED");
     }
@@ -69,7 +70,7 @@ export const listParametersForTest = async (req: Request, res: Response, next: N
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const testId = req.params.testId;
+    const testId = routeParam(req.params.testId);
     if (!testId) {
       throw new AppError("testId is required", HTTP_STATUS.BAD_REQUEST, "TEST_ID_REQUIRED");
     }
@@ -109,7 +110,7 @@ export const assignParameterToTest = async (req: Request, res: Response, next: N
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const testId = req.params.testId;
+    const testId = routeParam(req.params.testId);
     if (!testId) {
       throw new AppError("testId is required", HTTP_STATUS.BAD_REQUEST, "TEST_ID_REQUIRED");
     }
@@ -129,8 +130,8 @@ export const unassignParameterFromTest = async (req: Request, res: Response, nex
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const testId = req.params.testId;
-    const parameterId = req.params.parameterId;
+    const testId = routeParam(req.params.testId);
+    const parameterId = routeParam(req.params.parameterId);
     if (!testId) {
       throw new AppError("testId is required", HTTP_STATUS.BAD_REQUEST, "TEST_ID_REQUIRED");
     }
@@ -149,7 +150,7 @@ export const listRangesForParameter = async (req: Request, res: Response, next: 
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const parameterId = req.params.parameterId;
+    const parameterId = routeParam(req.params.parameterId);
     if (!parameterId) {
       throw new AppError("parameterId is required", HTTP_STATUS.BAD_REQUEST, "PARAMETER_ID_REQUIRED");
     }
@@ -165,7 +166,7 @@ export const replaceRangesForParameter = async (req: Request, res: Response, nex
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const parameterId = req.params.parameterId;
+    const parameterId = routeParam(req.params.parameterId);
     if (!parameterId) {
       throw new AppError("parameterId is required", HTTP_STATUS.BAD_REQUEST, "PARAMETER_ID_REQUIRED");
     }
@@ -181,7 +182,7 @@ export const getTestStudio = async (req: Request, res: Response, next: NextFunct
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const testId = req.params.testId as string;
+    const testId = routeParam(req.params.testId) as string;
     const studio = await catalogRepository.getTestStudio(req.tenantId, testId);
     if (!studio) {
       throw new AppError("Test not found", HTTP_STATUS.NOT_FOUND, "TEST_NOT_FOUND");
@@ -197,7 +198,7 @@ export const createParameterForTest = async (req: Request, res: Response, next: 
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const testId = req.params.testId as string;
+    const testId = routeParam(req.params.testId) as string;
     const parameter = await catalogRepository.createParameterForTest(req.tenantId, testId, req.body);
     res.status(HTTP_STATUS.CREATED).json({ parameter });
   } catch (err) {
@@ -210,7 +211,7 @@ export const saveParameterStudio = async (req: Request, res: Response, next: Nex
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const parameterId = req.params.parameterId as string;
+    const parameterId = routeParam(req.params.parameterId) as string;
     const parameter = await catalogRepository.saveParameterStudio(req.tenantId, parameterId, req.body);
     res.status(HTTP_STATUS.OK).json({ parameter });
   } catch (err) {
@@ -223,7 +224,7 @@ export const getParameterDetail = async (req: Request, res: Response, next: Next
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const parameterId = req.params.parameterId as string;
+    const parameterId = routeParam(req.params.parameterId) as string;
     const parameter = await catalogRepository.getParameterById(req.tenantId, parameterId);
     if (!parameter) {
       throw new AppError("Parameter not found", HTTP_STATUS.NOT_FOUND, "PARAMETER_NOT_FOUND");

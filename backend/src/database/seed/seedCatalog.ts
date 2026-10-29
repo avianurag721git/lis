@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { db } from "../postgres";
 import { PatientGender } from "../../modules/report/reportTemplates.types";
 import { seedLog } from "./seedLogger";
-import { PKG001_ID, PKG002_ID } from "./productionSeed.constants";
+import { APOLLO_TENANT_ID, PKG001_ID, PKG002_ID } from "./productionSeed.constants";
 
 type ParamSpec = {
   name: string;
@@ -209,10 +209,13 @@ export type CatalogSeedResult = {
 };
 
 export const seedProductionCatalog = async (tenantId: string): Promise<CatalogSeedResult> => {
-  seedLog.header("Test Catalog & Packages");
+  seedLog.header(`Test Catalog & Packages (${tenantId})`);
   const testIds: Record<string, string> = {};
   const paramIds: Record<string, string> = {};
   const departmentIds: Record<string, string> = {};
+  // Fixed package IDs only for Apollo (clinical seed references them); other tenants get unique IDs.
+  const pkg001Id = tenantId === APOLLO_TENANT_ID ? PKG001_ID : randomUUID();
+  const pkg002Id = tenantId === APOLLO_TENANT_ID ? PKG002_ID : randomUUID();
 
   await db.transaction(async (client) => {
     const upsertDepartment = async (name: string): Promise<string> => {
@@ -328,28 +331,35 @@ export const seedProductionCatalog = async (tenantId: string): Promise<CatalogSe
       `INSERT INTO test_packages (id, tenant_id, name, code, price_minor)
        VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (tenant_id, name) DO UPDATE SET code = EXCLUDED.code, price_minor = EXCLUDED.price_minor`,
-      [PKG001_ID, tenantId, "Master Health Checkup Package", "PKG001", 250000]
+      [pkg001Id, tenantId, "Master Health Checkup Package", "PKG001", 250000]
     );
     await client.query(
       `INSERT INTO test_packages (id, tenant_id, name, code, price_minor)
        VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (tenant_id, name) DO UPDATE SET code = EXCLUDED.code, price_minor = EXCLUDED.price_minor`,
-      [PKG002_ID, tenantId, "Executive Cardiac & Diabetes Panel", "PKG002", 160000]
+      [pkg002Id, tenantId, "Executive Cardiac & Diabetes Panel", "PKG002", 160000]
     );
+
+    const resolvedPkg001 = (
+      await client.query(`SELECT id FROM test_packages WHERE tenant_id = $1 AND code = 'PKG001' LIMIT 1`, [tenantId])
+    ).rows[0] as { id: string };
+    const resolvedPkg002 = (
+      await client.query(`SELECT id FROM test_packages WHERE tenant_id = $1 AND code = 'PKG002' LIMIT 1`, [tenantId])
+    ).rows[0] as { id: string };
 
     const pkg1Tests = ["CBC001", "KFT001", "LFT001", "LIPID001", "HBA1C001"];
     for (const code of pkg1Tests) {
       await client.query(
         `INSERT INTO test_package_items (id, tenant_id, package_id, test_id)
          VALUES ($1,$2,$3,$4) ON CONFLICT (tenant_id, package_id, test_id) DO NOTHING`,
-        [randomUUID(), tenantId, PKG001_ID, testIds[code]]
+        [randomUUID(), tenantId, resolvedPkg001.id, testIds[code]]
       );
     }
     for (const code of ["LIPID001", "HBA1C001", "KFT001"]) {
       await client.query(
         `INSERT INTO test_package_items (id, tenant_id, package_id, test_id)
          VALUES ($1,$2,$3,$4) ON CONFLICT (tenant_id, package_id, test_id) DO NOTHING`,
-        [randomUUID(), tenantId, PKG002_ID, testIds[code]]
+        [randomUUID(), tenantId, resolvedPkg002.id, testIds[code]]
       );
     }
 
@@ -357,11 +367,16 @@ export const seedProductionCatalog = async (tenantId: string): Promise<CatalogSe
       `INSERT INTO report_templates (id, tenant_id, template_type, name, show_reference_range, auto_bold_abnormal, group_by_test)
        VALUES ($1,$2,'STANDARD',$3,TRUE,TRUE,TRUE)
        ON CONFLICT (tenant_id, template_type) DO UPDATE SET name = EXCLUDED.name`,
-      [randomUUID(), tenantId, "Apollo Standard Report"]
+      [randomUUID(), tenantId, `${tenantId === APOLLO_TENANT_ID ? "Apollo" : "Lab"} Standard Report`]
     );
   });
 
   seedLog.count("Test", PRODUCTION_TESTS.length);
   seedLog.count("Package", 2);
-  return { testIds, paramIds, departmentIds, packageIds: { pkg001: PKG001_ID, pkg002: PKG002_ID } };
+  return {
+    testIds,
+    paramIds,
+    departmentIds,
+    packageIds: { pkg001: pkg001Id, pkg002: pkg002Id }
+  };
 };

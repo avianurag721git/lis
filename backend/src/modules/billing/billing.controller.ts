@@ -4,6 +4,7 @@ import { HTTP_STATUS } from "../../common/constants/httpStatus";
 import { UserRole } from "../auth/auth.types";
 import { billingService } from "./billing.service";
 import { cashierService } from "../cashier/cashier.service";
+import { routeParam } from "../../common/http/routeParam";
 
 const ok = <T>(res: Response, data: T, status: number = HTTP_STATUS.OK): void => {
   res.status(status).json({ success: true, data });
@@ -97,7 +98,7 @@ export const approveDiscount = async (req: Request, res: Response, next: NextFun
       req.tenantId,
       req.authUser.userId,
       req.authUser.role as UserRole,
-      req.params.orderId!
+      routeParam(req.params.orderId)!
     );
     ok(res, result);
   } catch (err) {

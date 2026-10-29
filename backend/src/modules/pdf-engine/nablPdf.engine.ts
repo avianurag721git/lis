@@ -1,9 +1,11 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import https from "https";
+import http from "http";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
-import bwipjs from "bwip-js";
+import bwipjs from "bwip-js/node";
 import { db } from "../../database/postgres";
 import { env } from "../../config/env";
 import { AppError } from "../../common/errors/AppError";
@@ -14,8 +16,28 @@ import { PendingLabResultRow } from "../lab-results/labResult.types";
 import { reportObjectStore } from "./reportObjectStore";
 import { aiPathologistService, flattenVerifiedResults } from "../ai-pathologist/aiPathologist.service";
 import { PatientSummaryOutput } from "../ai-pathologist/aiPathologist.types";
+import { TenantBranding, TenantConfiguration } from "../tenant/tenant.types";
+import { defaultBranding } from "../saas/saas.types";
+import {
+  ReportLayoutConfig,
+  ReportPatientFieldId,
+  isFieldEnabled,
+  parseReportLayout,
+  sortedEnabled
+} from "../saas/reportLayout.types";
+import { formatIsoDateDisplay, resolvePatientAge } from "../../common/age/patientAge";
+import { LabResultEntryDto } from "../lab-results/labResult.types";
 
 const reportsDir = path.resolve(process.cwd(), "storage", "nabl-reports");
+
+const PAGE = {
+  left: 40,
+  right: 555,
+  width: 515,
+  contentTop: 168,
+  contentBottom: 760,
+  footerY: 768
+};
 
 const ensureDir = async (): Promise<void> => {
   await fs.promises.mkdir(reportsDir, { recursive: true });
@@ -40,101 +62,632 @@ export const decryptReportBuffer = (payload: Buffer): Buffer => {
   return Buffer.concat([decipher.update(data), decipher.final()]);
 };
 
-const drawHeader = (
-  doc: PDFKit.PDFDocument,
-  labName: string,
-  barcodePng: Buffer,
-  nablCert: string,
-  branding?: { primaryColor?: string; secondaryColor?: string; labHeaderAddress?: string }
-): void => {
-  const primary = branding?.primaryColor ?? "#0b5cab";
-  const secondary = branding?.secondaryColor ?? "#b91c1c";
-  const address = branding?.labHeaderAddress?.trim() || "Main Branch · Lab Complex, City Center · Tel: +91-1800-000-000 · reports@yourlab.com";
-
-  doc.roundedRect(40, 36, 70, 36, 4).fillAndStroke(primary, primary);
-  doc.fillColor("#fff").font("Helvetica-Bold").fontSize(10).text("NABL", 52, 42);
-  doc.font("Helvetica").fontSize(6).text(nablCert, 44, 56, { width: 62, align: "center" });
-
-  doc.roundedRect(120, 36, 70, 36, 4).fillAndStroke(secondary, secondary);
-  doc.fillColor("#fff").font("Helvetica-Bold").fontSize(10).text("NABH", 138, 48);
-
-  doc.image(barcodePng, 430, 32, { width: 120, height: 40 });
-
-  doc.fillColor("#000").font("Helvetica-Bold").fontSize(16).text(labName, 40, 80, { align: "center", width: 515 });
-  doc.font("Helvetica").fontSize(8).fillColor("#333");
-  doc.text("NABL Accredited · ISO 15189:2022 Compliant · NABH Assured", { align: "center" });
-  doc.text(address, { align: "center" });
-  doc.moveDown(0.4);
-  doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke("#999");
-  doc.moveDown(0.5);
-  doc.fillColor("#000");
+const formatDt = (iso: string | null | undefined): string => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-const drawPatientBox = (
+const formatDob = (dob: string | null | undefined): string => formatIsoDateDisplay(dob);
+
+const ageYearsForReport = (row: PendingLabResultRow): number | null => {
+  try {
+    const resolved = resolvePatientAge({
+      dateOfBirth: row.patientDob,
+      ageYears: row.patientAgeYears
+    });
+    return resolved.ageYears;
+  } catch {
+    return row.patientAgeYears != null ? Math.floor(row.patientAgeYears) : null;
+  }
+};
+
+const hasReportableValue = (e: LabResultEntryDto): boolean => {
+  if (e.id.startsWith("draft:")) return false;
+  if (e.value != null && Number.isFinite(e.value)) return true;
+  const text = e.valueText?.trim();
+  return Boolean(text && text !== "—" && text !== "-");
+};
+
+/** Strip duplicated unit suffix from catalog names like "Lymphocytes %". */
+const displayParameterName = (name: string, unit: string | null): string => {
+  const u = unit?.trim();
+  if (!u) return name;
+  const trimmed = name.trim();
+  if (trimmed.endsWith(` ${u}`)) return trimmed.slice(0, -(u.length + 1)).trim();
+  if (trimmed.endsWith(u) && trimmed.length > u.length) {
+    return trimmed.slice(0, -u.length).trim();
+  }
+  return trimmed;
+};
+
+/**
+ * Result table columns (fixed so H/L never collides with the value).
+ * Unit column is intentionally wider for values like mL/min/1.73m2.
+ */
+const COL = {
+  paramX: 40,
+  paramW: 150,
+  resultX: 195,
+  resultW: 46,
+  flagX: 244,
+  flagW: 16,
+  unitX: 264,
+  unitW: 92,
+  refX: 362,
+  refW: 183
+};
+
+/** PDFKit leaves doc.x at the right after lineBreak:false cells — always reset before flow text. */
+const resetFlow = (doc: PDFKit.PDFDocument): void => {
+  doc.x = PAGE.left;
+};
+
+const leftText = (
   doc: PDFKit.PDFDocument,
-  row: PendingLabResultRow,
-  reportTime: string
+  text: string,
+  opts: {
+    fontSize?: number;
+    color?: string;
+    font?: string;
+    underline?: boolean;
+    lineGap?: number;
+  } = {}
 ): void => {
-  const y = doc.y;
-  doc.rect(40, y, 515, 78).stroke("#444");
+  resetFlow(doc);
+  if (opts.font) doc.font(opts.font);
+  if (opts.fontSize) doc.fontSize(opts.fontSize);
+  if (opts.color) doc.fillColor(opts.color);
+  doc.text(text, PAGE.left, doc.y, {
+    width: PAGE.width,
+    align: "left",
+    lineBreak: true,
+    underline: opts.underline,
+    lineGap: opts.lineGap
+  });
+};
+
+const fetchImageBuffer = async (url: string): Promise<Buffer | null> => {
+  try {
+    if (url.startsWith("data:image/")) {
+      const b64 = url.split(",")[1];
+      if (!b64) return null;
+      return Buffer.from(b64, "base64");
+    }
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      return await new Promise<Buffer | null>((resolve) => {
+        const client = url.startsWith("https://") ? https : http;
+        const req = client.get(url, { timeout: 5000 }, (res) => {
+          if ((res.statusCode ?? 500) >= 400) {
+            resolve(null);
+            return;
+          }
+          const chunks: Buffer[] = [];
+          res.on("data", (c) => chunks.push(c as Buffer));
+          res.on("end", () => resolve(Buffer.concat(chunks)));
+        });
+        req.on("error", () => resolve(null));
+        req.on("timeout", () => {
+          req.destroy();
+          resolve(null);
+        });
+      });
+    }
+    if (fs.existsSync(url)) {
+      return await fs.promises.readFile(url);
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
+
+type ReportContext = {
+  labName: string;
+  branding: TenantBranding;
+  layout: ReportLayoutConfig;
+  first: PendingLabResultRow;
+  reportedAt: string;
+  pathologistLine: string;
+  pathologistName: string;
+  barcodePng: Buffer;
+  logoPng: Buffer | null;
+  detailed: boolean;
+};
+
+const resolveLayout = (branding: TenantBranding): ReportLayoutConfig =>
+  parseReportLayout(branding.reportLayout ?? null);
+
+const drawLetterhead = (doc: PDFKit.PDFDocument, ctx: ReportContext): number => {
+  const { branding, labName, barcodePng, logoPng, layout } = ctx;
+  const primary = branding.primaryColor || "#0b5cab";
+  const secondary = branding.secondaryColor || "#b91c1c";
+  const header = layout.header;
+  let x = PAGE.left;
+
+  for (const field of sortedEnabled(header.fields, "left")) {
+    if (field.id === "logo" && logoPng) {
+      try {
+        doc.image(logoPng, x, 28, { fit: [56, 40] });
+        x += 64;
+      } catch {
+        /* ignore bad logo */
+      }
+    } else if (field.id === "nablBadge") {
+      doc.roundedRect(x, 28, 58, 34, 3).fillAndStroke(primary, primary);
+      doc.fillColor("#fff").font("Helvetica-Bold").fontSize(9).text("NABL", x + 14, 34);
+      const reg = branding.nablRegNo?.trim();
+      if (reg) {
+        doc.font("Helvetica").fontSize(5).text(reg, x + 4, 48, { width: 50, align: "center" });
+      }
+      x += 66;
+    } else if (field.id === "nabhBadge") {
+      doc.roundedRect(x, 28, 58, 34, 3).fillAndStroke(secondary, secondary);
+      doc.fillColor("#fff").font("Helvetica-Bold").fontSize(9).text("NABH", x + 14, 40);
+      x += 66;
+    }
+  }
+
+  if (isFieldEnabled(header.fields, "barcode")) {
+    try {
+      doc.image(barcodePng, 430, 26, { width: 120, height: 36 });
+    } catch {
+      /* ignore bad barcode */
+    }
+  }
+
+  const titleAlign = header.titleAlign || "center";
+  const contactAlign = header.contactAlign || "center";
+  doc.y = 72;
+
+  for (const field of sortedEnabled(header.fields, "center")) {
+    if (field.id === "labName" && labName.trim()) {
+      doc.fillColor("#000").font("Helvetica-Bold").fontSize(14).text(labName, PAGE.left, doc.y, {
+        align: field.align ?? titleAlign,
+        width: PAGE.width
+      });
+    } else if (field.id === "accreditationLine" && branding.accreditationLine?.trim()) {
+      doc.font("Helvetica").fontSize(7).fillColor("#333").text(branding.accreditationLine.trim(), PAGE.left, doc.y, {
+        align: field.align ?? titleAlign,
+        width: PAGE.width
+      });
+    }
+  }
+
+  const contactBits: string[] = [];
+  for (const field of sortedEnabled(header.fields, "center")) {
+    if (field.id === "address" && branding.labHeaderAddress?.trim()) {
+      contactBits.push(branding.labHeaderAddress.trim());
+    } else if (field.id === "phone" && branding.phone?.trim()) {
+      contactBits.push(`Tel: ${branding.phone.trim()}`);
+    } else if (field.id === "email" && branding.email?.trim()) {
+      contactBits.push(`Email: ${branding.email.trim()}`);
+    } else if (field.id === "website" && branding.website?.trim()) {
+      contactBits.push(branding.website.trim());
+    }
+  }
+  if (contactBits.length) {
+    doc.font("Helvetica").fontSize(7).fillColor("#333").text(contactBits.join(" · "), PAGE.left, doc.y, {
+      align: contactAlign,
+      width: PAGE.width
+    });
+  }
+
+  const y = doc.y + 4;
+  doc.moveTo(PAGE.left, y).lineTo(PAGE.right, y).stroke("#999");
+  return y + 6;
+};
+
+const patientFieldValue = (
+  id: ReportPatientFieldId,
+  ctx: ReportContext
+): { label: string; value: string; bold?: boolean } | null => {
+  const row = ctx.first;
+  const ageYears = ageYearsForReport(row);
+  const ageGender = [ageYears != null ? `${Math.floor(ageYears)} Years` : null, row.patientGender]
+    .filter(Boolean)
+    .join(" / ");
+
+  switch (id) {
+    case "patientName":
+      return row.patientName?.trim() ? { label: "Name", value: row.patientName.trim(), bold: true } : null;
+    case "dob": {
+      const dob = formatDob(row.patientDob);
+      return dob && dob !== "—" ? { label: "DOB", value: dob } : null;
+    }
+    case "ageGender":
+      return ageGender ? { label: "Age/Gender", value: ageGender } : null;
+    case "patientId":
+      return row.patientUhid?.trim() ? { label: "Patient ID", value: row.patientUhid.trim() } : null;
+    case "labId":
+      return row.orderNumber?.trim() ? { label: "Lab ID", value: row.orderNumber.trim() } : null;
+    case "status":
+      return { label: "Status", value: "Final" };
+    case "referredBy":
+      return { label: "Ref By", value: (row.referredDoctor ?? "Self").trim() || "Self" };
+    case "collectedAt": {
+      const v = formatDt(row.sampleCollectedAt);
+      return v !== "—" ? { label: "Collected", value: v } : null;
+    }
+    case "receivedAt": {
+      const v = formatDt(row.sampleReceivedAt);
+      return v !== "—" ? { label: "Received", value: v } : null;
+    }
+    case "reportedAt": {
+      const v = formatDt(ctx.reportedAt);
+      return v !== "—" ? { label: "Reported", value: v } : null;
+    }
+    case "sampleQuality":
+      return row.sampleQuality?.trim()
+        ? { label: "Sample Quality", value: row.sampleQuality.trim() }
+        : null;
+    case "phone":
+      return row.patientPhone?.trim() ? { label: "Phone", value: row.patientPhone.trim() } : null;
+    default:
+      return null;
+  }
+};
+
+const drawPatientHeader = (doc: PDFKit.PDFDocument, ctx: ReportContext, topY: number): number => {
+  const columns = ctx.layout.patient.columns === 2 ? 2 : 3;
+  const colKeys = columns === 2 ? (["left", "right"] as const) : (["left", "middle", "right"] as const);
+  const colXs =
+    columns === 2
+      ? [PAGE.left + 8, PAGE.left + 8 + PAGE.width / 2]
+      : [PAGE.left + 8, 230, 400];
+  const colWidth = columns === 2 ? PAGE.width / 2 - 16 : 145;
+
+  const linesByCol = colKeys.map((group) => {
+    const fields = sortedEnabled(ctx.layout.patient.fields, group);
+    const lines: Array<{ label: string; value: string; bold?: boolean }> = [];
+    for (const field of fields) {
+      const resolved = patientFieldValue(field.id, ctx);
+      if (resolved) lines.push(resolved);
+    }
+    // Fields assigned to middle when only 2 columns are rendered → fold into left
+    return lines;
+  });
+
+  if (columns === 2) {
+    const middleExtras = sortedEnabled(ctx.layout.patient.fields, "middle")
+      .map((f) => patientFieldValue(f.id, ctx))
+      .filter((v): v is NonNullable<typeof v> => Boolean(v));
+    linesByCol[0] = [...linesByCol[0]!, ...middleExtras];
+  }
+
+  const rowCount = Math.max(1, ...linesByCol.map((c) => c.length));
+  const boxH = Math.max(40, 8 + rowCount * 16);
+  doc.rect(PAGE.left, topY, PAGE.width, boxH).stroke("#444");
   doc.fontSize(8).fillColor("#000");
-  doc.font("Helvetica-Bold").text(`UHID: ${row.patientUhid}`, 48, y + 8);
-  doc.font("Helvetica").text(`Booking ID: ${row.orderNumber}`, 230, y + 8);
-  doc.text(`Patient: ${row.patientName}`, 48, y + 24);
-  doc.text(`Age/Gender: ${row.patientAgeYears ?? "—"} / ${row.patientGender ?? "—"}`, 230, y + 24);
-  doc.text(`Referred By: ${row.referredDoctor ?? "Self"}`, 400, y + 24, { width: 145 });
-  doc.text(
-    `Collected: ${row.sampleCollectedAt ? new Date(row.sampleCollectedAt).toLocaleString() : "—"}`,
-    48,
-    y + 40
-  );
-  doc.text(
-    `Received: ${row.sampleReceivedAt ? new Date(row.sampleReceivedAt).toLocaleString() : "—"}`,
-    230,
-    y + 40
-  );
-  doc.text(`Verified: ${reportTime}`, 400, y + 40, { width: 145 });
-  doc.fontSize(7).fillColor("#555").text("ISO 15189 — Results for clinical use only", 48, y + 58);
-  doc.y = y + 86;
-  doc.fillColor("#000");
+
+  colKeys.forEach((_, colIdx) => {
+    const lines = linesByCol[colIdx] ?? [];
+    const x = colXs[colIdx]!;
+    lines.forEach((line, i) => {
+      const y = topY + 6 + i * 16;
+      const text = `${line.label}: ${line.value}`;
+      doc.font(line.bold ? "Helvetica-Bold" : "Helvetica").fillColor("#000").text(text, x, y, {
+        width: colWidth,
+        lineBreak: false
+      });
+    });
+  });
+
+  resetFlow(doc);
+  return topY + boxH + 10;
 };
 
-const drawClinicalImpression = (doc: PDFKit.PDFDocument, impression: string): void => {
-  if (doc.y > 620) doc.addPage();
-  const y = doc.y + 8;
-  doc.rect(40, y, 515, 52).fillAndStroke("#eff6ff", "#0b5cab");
-  doc.fillColor("#0b5cab").font("Helvetica-Bold").fontSize(9).text("Clinical Impression (MD Pathologist)", 48, y + 8);
-  doc.fillColor("#111").font("Helvetica").fontSize(8).text(impression, 48, y + 22, { width: 498, lineGap: 2 });
-  doc.y = y + 58;
-  doc.fillColor("#000");
+const beginContentPage = (doc: PDFKit.PDFDocument, ctx: ReportContext): void => {
+  doc.addPage();
+  const afterLetterhead = drawLetterhead(doc, ctx);
+  doc.y = drawPatientHeader(doc, ctx, afterLetterhead);
+  resetFlow(doc);
 };
 
-const drawPatientSummaryPage = (
+const ensureContentSpace = (doc: PDFKit.PDFDocument, needed: number, ctx: ReportContext): void => {
+  if (doc.y + needed <= PAGE.contentBottom) return;
+  beginContentPage(doc, ctx);
+};
+
+const drawColumnHeaders = (doc: PDFKit.PDFDocument): void => {
+  const y = doc.y;
+  doc.font("Helvetica-Bold").fontSize(7).fillColor("#000");
+  doc.text("Parameter", COL.paramX, y, { width: COL.paramW, lineBreak: false });
+  doc.text("Result", COL.resultX, y, { width: COL.resultW + COL.flagW, lineBreak: false });
+  doc.text("Unit", COL.unitX, y, { width: COL.unitW, lineBreak: false });
+  doc.text("Biological Ref. Interval", COL.refX, y, { width: COL.refW, lineBreak: false });
+  doc.moveTo(PAGE.left, y + 12).lineTo(PAGE.right, y + 12).stroke("#bbb");
+  doc.x = PAGE.left;
+  doc.y = y + 16;
+};
+
+/** Page-break helper that re-prints column headers when a results table continues. */
+const ensureTableRowSpace = (doc: PDFKit.PDFDocument, needed: number, ctx: ReportContext): void => {
+  if (doc.y + needed <= PAGE.contentBottom) return;
+  beginContentPage(doc, ctx);
+  drawColumnHeaders(doc);
+};
+
+const drawResultRow = (doc: PDFKit.PDFDocument, e: LabResultEntryDto, y: number): number => {
+  const valueLabel = e.value == null ? String(e.valueText ?? "").trim() : String(e.value);
+  let flag = "";
+  if (e.flag === "H" || e.flag === "L") flag = e.flag;
+  else if (e.isCritical || e.flag === "CRITICAL") flag = "H";
+  else if (e.isAbnormal && e.referenceMax != null && e.value != null && e.value > e.referenceMax) flag = "H";
+  else if (e.isAbnormal && e.referenceMin != null && e.value != null && e.value < e.referenceMin) flag = "L";
+
+  const critical = e.isCritical || e.flag === "CRITICAL";
+  const abnormal = critical || e.isAbnormal || flag === "H" || flag === "L";
+  const paramLabel = displayParameterName(e.parameterName, e.unit);
+
+  doc.fontSize(8);
+  doc.fillColor(critical ? "#b91c1c" : "#000").font(abnormal ? "Helvetica-Bold" : "Helvetica");
+  doc.text(paramLabel, COL.paramX, y, { width: COL.paramW, lineBreak: false });
+  doc.text(valueLabel, COL.resultX, y, { width: COL.resultW, lineBreak: false });
+  if (flag) {
+    doc.fillColor("#b91c1c").font("Helvetica-Bold").text(flag, COL.flagX, y, {
+      width: COL.flagW,
+      align: "center",
+      lineBreak: false
+    });
+  }
+  doc.font("Helvetica").fillColor("#000");
+  const unit = e.unit ?? "";
+  // Long units (eGFR) use a slightly smaller size so they stay on one line in the unit column
+  doc.fontSize(unit.length > 12 ? 6.5 : 8).text(unit, COL.unitX, y + (unit.length > 12 ? 1 : 0), {
+    width: COL.unitW,
+    lineBreak: false
+  });
+  doc.fontSize(8).text(e.referenceRange && e.referenceRange !== "—" ? e.referenceRange : "", COL.refX, y, {
+    width: COL.refW,
+    lineBreak: false
+  });
+  resetFlow(doc);
+  return y + 14;
+};
+
+const drawTestBlock = (
   doc: PDFKit.PDFDocument,
+  result: PendingLabResultRow,
+  ctx: ReportContext
+): void => {
+  const reportable = result.entries.filter(hasReportableValue);
+  if (reportable.length === 0) return;
+
+  ensureContentSpace(doc, 60, ctx);
+  const method =
+    reportable.find((e) => e.methodology)?.methodology ?? "CLIA / Photometry";
+  const specimen = result.testSampleType ?? result.sampleType ?? "—";
+
+  leftText(doc, result.testName.toUpperCase(), {
+    font: "Helvetica-Bold",
+    fontSize: 10,
+    color: "#0b5cab"
+  });
+  leftText(doc, `Specimen: ${specimen}    Method: ${method}`, {
+    font: "Helvetica",
+    fontSize: 7,
+    color: "#333"
+  });
+  doc.moveDown(0.25);
+  resetFlow(doc);
+  drawColumnHeaders(doc);
+
+  for (const e of reportable) {
+    ensureTableRowSpace(doc, 16, ctx);
+    doc.y = drawResultRow(doc, e, doc.y);
+  }
+
+  if (ctx.detailed && result.technicianNote?.trim()) {
+    ensureContentSpace(doc, 40, ctx);
+    doc.moveDown(0.35);
+    leftText(doc, "Clinical significance / Comments", {
+      font: "Helvetica-Bold",
+      fontSize: 8,
+      color: "#0b5cab"
+    });
+    leftText(doc, result.technicianNote.trim(), {
+      font: "Helvetica",
+      fontSize: 7,
+      color: "#111",
+      lineGap: 1
+    });
+  }
+  resetFlow(doc);
+  doc.moveDown(0.55);
+  doc.fillColor("#000");
+};
+
+const drawClinicalImpression = (doc: PDFKit.PDFDocument, impression: string, ctx: ReportContext): void => {
+  const bodyHeight = doc.heightOfString(impression, { width: 498, lineGap: 2 });
+  const boxH = Math.max(48, 28 + bodyHeight);
+  ensureContentSpace(doc, boxH + 12, ctx);
+  const y = doc.y;
+  doc.rect(PAGE.left, y, PAGE.width, boxH).fillAndStroke("#eff6ff", "#0b5cab");
+  doc.fillColor("#0b5cab").font("Helvetica-Bold").fontSize(9).text("Clinical Impression (MD Pathologist)", 48, y + 6);
+  doc.fillColor("#111").font("Helvetica").fontSize(8).text(impression, 48, y + 20, { width: 498, lineGap: 2 });
+  doc.y = y + boxH + 10;
+  doc.fillColor("#000");
+};
+
+const drawSignaturesAndQr = async (
+  doc: PDFKit.PDFDocument,
+  ctx: ReportContext,
+  verifyUrl: string,
+  qrPng: Buffer | null,
+  signaturePng: Buffer | null
+): Promise<void> => {
+  const footer = ctx.layout.footer;
+  const showBanner = isFieldEnabled(footer.fields, "endOfReport");
+  const showQr = isFieldEnabled(footer.fields, "qrCode") && Boolean(qrPng);
+  const showQrCaption = isFieldEnabled(footer.fields, "qrCaption");
+  const showDesignation = isFieldEnabled(footer.fields, "pathologistDesignation");
+  const showName = isFieldEnabled(footer.fields, "pathologistName");
+  const showSignature = isFieldEnabled(footer.fields, "signature");
+
+  // Clear gap between last result row and the End Of Report marker
+  resetFlow(doc);
+  doc.y += 36;
+  ensureContentSpace(doc, 160, ctx);
+  resetFlow(doc);
+  doc.y += 18;
+
+  if (showBanner) {
+    doc.font("Helvetica").fontSize(9).fillColor("#000").text(
+      "------------------ End Of Report ------------------",
+      PAGE.left,
+      doc.y,
+      { align: "center", width: PAGE.width, lineBreak: false }
+    );
+    doc.y += 20;
+  }
+
+  const qrY = doc.y;
+  let leftBottom = qrY;
+  let rightBottom = qrY;
+
+  if (showQr && qrPng) {
+    try {
+      doc.image(qrPng, PAGE.left, qrY, { width: 56, height: 56 });
+      leftBottom = Math.max(leftBottom, qrY + 56);
+    } catch {
+      /* skip broken QR */
+    }
+  }
+
+  if (showQrCaption) {
+    const captionX = showQr ? 108 : PAGE.left;
+    doc.fontSize(8).fillColor("#000").text("Scan QR to verify report authenticity", captionX, qrY + 8, {
+      width: 220,
+      lineBreak: false
+    });
+    doc.fontSize(7).fillColor("#555").text("Do not trust a report without a valid QR check.", captionX, qrY + 24, {
+      width: 220,
+      lineBreak: false
+    });
+    let hostLabel = "verification link";
+    try {
+      hostLabel = new URL(verifyUrl).host;
+    } catch {
+      /* keep fallback */
+    }
+    doc.fillColor("#0b5cab").fontSize(7).text(`Verify online · ${hostLabel}`, captionX, qrY + 40, {
+      width: 220,
+      link: verifyUrl,
+      lineBreak: false
+    });
+    leftBottom = Math.max(leftBottom, qrY + 56);
+  }
+
+  const sigX = 360;
+  let sigY = qrY;
+  for (const field of sortedEnabled(footer.fields, "right")) {
+    if (field.id === "pathologistDesignation" && showDesignation) {
+      doc.fillColor("#000").font("Helvetica-Bold").fontSize(9).text("MD Pathologist", sigX, sigY, {
+        width: 180,
+        lineBreak: false
+      });
+      sigY += 14;
+    } else if (field.id === "pathologistName" && showName && ctx.pathologistLine.trim()) {
+      doc.font("Helvetica").fontSize(8).fillColor("#000").text(ctx.pathologistLine, sigX, sigY, {
+        width: 180,
+        lineBreak: false
+      });
+      sigY += 14;
+    } else if (field.id === "signature" && showSignature) {
+      if (ctx.detailed && signaturePng) {
+        try {
+          doc.image(signaturePng, sigX, sigY, { fit: [110, 32] });
+          sigY += 34;
+        } catch {
+          doc.fontSize(7).fillColor("#555").text("e-Signature on file", sigX, sigY, { lineBreak: false });
+          sigY += 12;
+        }
+      } else if (ctx.detailed) {
+        doc.fontSize(7).fillColor("#555").text("e-Signature on file", sigX, sigY, { lineBreak: false });
+        sigY += 12;
+      }
+    }
+  }
+  rightBottom = Math.max(rightBottom, sigY);
+
+  doc.x = PAGE.left;
+  doc.y = Math.max(leftBottom, rightBottom, qrY) + 12;
+  doc.fillColor("#000");
+};
+
+/** Continues on the current page (only page-breaks if needed for space). */
+const drawPatientSummarySection = (
+  doc: PDFKit.PDFDocument,
+  ctx: ReportContext,
   labName: string,
   patientName: string,
   summary: PatientSummaryOutput
 ): void => {
-  doc.addPage();
-  doc.font("Helvetica-Bold").fontSize(14).fillColor("#0284c7").text("Smart Patient Summary", { align: "center" });
-  doc.moveDown(0.3);
-  doc.font("Helvetica").fontSize(9).fillColor("#444").text(`${labName} · Prepared for ${patientName}`, { align: "center" });
-  doc.moveDown(0.8);
-  doc.roundedRect(40, doc.y, 515, 200, 8).stroke("#cbd5e1");
-  const boxY = doc.y + 14;
-  doc.font("Helvetica").fontSize(10).fillColor("#111");
-  let offsetY = boxY;
-  for (const bullet of summary.bullets) {
-    doc.text(bullet, 52, offsetY, { width: 490, lineGap: 4 });
-    offsetY += 36;
+  const bullets = summary.bullets ?? [];
+  const approxHeight = 56 + bullets.length * 22 + (summary.disclaimer ? 24 : 0);
+  ensureContentSpace(doc, Math.min(approxHeight, 160), ctx);
+  resetFlow(doc);
+  doc.moveDown(0.35);
+
+  leftText(doc, "Smart Patient Summary", {
+    font: "Helvetica-Bold",
+    fontSize: 12,
+    color: "#0284c7"
+  });
+  leftText(doc, `${labName} · ${patientName}`, {
+    font: "Helvetica",
+    fontSize: 8,
+    color: "#333"
+  });
+  doc.moveDown(0.25);
+  leftText(doc, "Summary", { font: "Helvetica-Bold", fontSize: 10, color: "#000" });
+
+  for (const bullet of bullets) {
+    ensureContentSpace(doc, 28, ctx);
+    leftText(doc, `• ${bullet}`, { font: "Helvetica", fontSize: 8, color: "#111", lineGap: 1 });
   }
-  doc.y = boxY + 200;
-  doc.moveDown(0.5);
-  doc.font("Helvetica-Oblique").fontSize(7).fillColor("#64748b").text(summary.disclaimer, { align: "center", width: 515 });
-  doc.font("Helvetica").fontSize(6).fillColor("#94a3b8").text(
-    `AI-assisted summary · ${summary.provider}/${summary.model} · Not a substitute for medical consultation`,
-    { align: "center" }
-  );
+
+  if (summary.disclaimer) {
+    ensureContentSpace(doc, 24, ctx);
+    doc.moveDown(0.2);
+    leftText(doc, summary.disclaimer, { font: "Helvetica", fontSize: 7, color: "#555" });
+  }
+  resetFlow(doc);
+  doc.fillColor("#000");
+};
+
+const stampPageChrome = (doc: PDFKit.PDFDocument, ctx: ReportContext, pageIndex: number, pageCount: number): void => {
+  const footer = ctx.layout.footer;
+  doc.fontSize(7).fillColor("#444");
+
+  if (isFieldEnabled(footer.fields, "processedAt")) {
+    const processed = ctx.branding.processedAtLabel?.trim()
+      ? `Processed At: ${ctx.branding.processedAtLabel.trim()}`
+      : `Processed At: ${ctx.labName}`;
+    doc.text(processed, PAGE.left, PAGE.footerY, { width: 200 });
+  }
+
+  if (isFieldEnabled(footer.fields, "pathologistName") && ctx.pathologistLine.trim()) {
+    doc.text(ctx.pathologistLine, 220, PAGE.footerY, { width: 220 });
+  }
+
+  if (isFieldEnabled(footer.fields, "pageNumber")) {
+    doc.text(`Page ${pageIndex} of ${pageCount}`, 450, PAGE.footerY, { width: 100, align: "right" });
+  }
+
+  if (isFieldEnabled(footer.fields, "hlLegend")) {
+    doc.fontSize(6).text("H-High   L- Low", PAGE.left, PAGE.footerY + 12);
+  }
+
+  if (isFieldEnabled(footer.fields, "disclaimer")) {
+    const disclaimer = (ctx.branding.reportDisclaimer || defaultBranding().reportDisclaimer).trim();
+    if (disclaimer) {
+      doc.fontSize(6).text(disclaimer, PAGE.left, PAGE.footerY + 22, { width: PAGE.width });
+    }
+  }
 };
 
 export const nablPdfEngine = {
@@ -152,22 +705,33 @@ export const nablPdfEngine = {
     }
 
     const first = verifiedRows[0]!;
-    const tenantConfig = await tenantService.resolveTenantConfiguration(input.tenantId);
+    const tenantConfig: TenantConfiguration = await tenantService.resolveTenantConfiguration(input.tenantId);
+    const branding: TenantBranding = { ...defaultBranding(), ...(tenantConfig.branding ?? {}) };
+    const layout = resolveLayout(branding);
+    branding.reportLayout = layout;
+    const detailed = tenantConfig.reportTemplate === "DETAILED";
     const profile = await labResultService.getPathologistProfile(input.tenantId, input.userId);
-    const sigRow = (
-      await db.query(
-        `SELECT pathologist_name, pathologist_license, pathologist_signature_url FROM lab_results WHERE id = $1`,
-        [first.labResultId]
-      )
-    ).rows[0] as {
-      pathologist_name: string | null;
-      pathologist_license: string | null;
-      pathologist_signature_url: string | null;
-    };
+
+    const pathName = first.pathologistName ?? profile.fullName;
+    const license = first.pathologistLicense ?? profile.medicalLicenseNumber;
+    const signatureUrl = first.pathologistSignatureUrl ?? profile.digitalSignatureUrl;
+    const pathologistLine = `${pathName}${license ? ` (${license})` : ""}`;
+
+    const reportedAt =
+      verifiedRows
+        .map((r) => r.verifiedAt)
+        .filter((v): v is string => Boolean(v))
+        .sort()
+        .slice(-1)[0] ?? new Date().toISOString();
 
     const verifyToken = crypto.randomBytes(16).toString("hex");
     const verifyUrl = `${env.publicVerifyBaseUrl}/${input.orderId}?t=${verifyToken}`;
-    const qrPng = await QRCode.toBuffer(verifyUrl, { type: "png", width: 120, margin: 1 });
+    let qrPng: Buffer | null = null;
+    try {
+      qrPng = await QRCode.toBuffer(verifyUrl, { type: "png", width: 120, margin: 1 });
+    } catch {
+      qrPng = null;
+    }
     const barcodePng = await bwipjs.toBuffer({
       bcid: "code128",
       text: first.orderNumber,
@@ -177,17 +741,27 @@ export const nablPdfEngine = {
       textxalign: "center"
     });
 
-    const nablCert = tenantConfig.branding?.nablRegNo || process.env.NABL_CERTIFICATE_NUMBER || "MC-1234";
     const labName = tenantConfig.brandingName || "DiagLab Diagnostics";
-    const pdfBranding = tenantConfig.branding
-      ? {
-          primaryColor: tenantConfig.branding.primaryColor,
-          secondaryColor: tenantConfig.branding.secondaryColor,
-          labHeaderAddress: tenantConfig.branding.labHeaderAddress
-        }
-      : undefined;
+    const logoPng =
+      isFieldEnabled(layout.header.fields, "logo") && branding.logoUrl
+        ? await fetchImageBuffer(branding.logoUrl)
+        : null;
+    const signaturePng = signatureUrl ? await fetchImageBuffer(signatureUrl) : null;
 
-    // Group by department
+    const ctx: ReportContext = {
+      labName,
+      branding,
+      layout,
+      first,
+      reportedAt,
+      pathologistLine,
+      pathologistName: pathName,
+      barcodePng,
+      logoPng,
+      detailed
+    };
+
+    // Group by department for section order; still print each test as its own block
     const byDept = new Map<string, PendingLabResultRow[]>();
     for (const r of verifiedRows) {
       const list = byDept.get(r.departmentName) ?? [];
@@ -195,8 +769,11 @@ export const nablPdfEngine = {
       byDept.set(r.departmentName, list);
     }
 
+    const includePatientSummary =
+      isFieldEnabled(layout.sections.fields, "patientSummary") && env.aiPatientSummaryInPdf !== false;
+
     let patientSummary: PatientSummaryOutput | null = null;
-    if (env.aiPatientSummaryInPdf) {
+    if (includePatientSummary) {
       try {
         patientSummary = await aiPathologistService.patientSummary({
           language: input.patientSummaryLanguage ?? env.aiPatientSummaryLanguage,
@@ -217,112 +794,43 @@ export const nablPdfEngine = {
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
-      drawHeader(doc, labName, barcodePng, nablCert, pdfBranding);
-      const reportTime = new Date().toLocaleString();
-      drawPatientBox(doc, first, reportTime);
-
-      const cols = [40, 175, 240, 290, 430];
+      const afterLetterhead = drawLetterhead(doc, ctx);
+      doc.y = drawPatientHeader(doc, ctx, afterLetterhead);
 
       for (const [dept, rows] of byDept) {
-        if (doc.y > 680) doc.addPage();
-        doc.font("Helvetica-Bold").fontSize(11).fillColor("#0b5cab").text(dept.toUpperCase(), { underline: true });
+        ensureContentSpace(doc, 28, ctx);
+        leftText(doc, dept.toUpperCase(), {
+          font: "Helvetica-Bold",
+          fontSize: 11,
+          color: "#0b5cab",
+          underline: true
+        });
+        resetFlow(doc);
         doc.fillColor("#000").moveDown(0.3);
-        doc.font("Helvetica-Bold").fontSize(7);
-        const headerY = doc.y;
-        doc.text("Test / Parameter", cols[0], headerY);
-        doc.text("Value", cols[1], headerY);
-        doc.text("Unit", cols[2], headerY);
-        doc.text("Biological Ref. Interval", cols[3], headerY);
-        doc.text("Methodology", cols[4], headerY, { width: 120 });
-        doc.moveDown(0.6);
-        doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke("#bbb");
-        doc.moveDown(0.25);
-
         for (const result of rows) {
-          doc.font("Helvetica-Bold").fontSize(8).text(result.testName);
-          doc.font("Helvetica").fontSize(8);
-          for (const e of result.entries) {
-            if (doc.y > 700) doc.addPage();
-            const y = doc.y;
-            const valueLabel = e.value == null ? e.valueText ?? "—" : String(e.value);
-            let display = valueLabel;
-            if (e.flag === "H" || e.flag === "L") display = `${valueLabel} (${e.flag})`;
-            if (e.isCritical || e.flag === "CRITICAL") display = `${valueLabel} CRITICAL`;
-
-            if (e.isCritical || e.flag === "CRITICAL") {
-              doc.fillColor("#b91c1c").font("Helvetica-Bold");
-            } else if (e.isAbnormal || e.flag === "H" || e.flag === "L") {
-              doc.fillColor("#000").font("Helvetica-Bold");
-            } else {
-              doc.fillColor("#000").font("Helvetica");
-            }
-
-            doc.text(e.parameterName, cols[0], y, { width: 130 });
-            doc.text(display, cols[1], y, { width: 60 });
-            doc.font("Helvetica").fillColor("#000");
-            doc.text(e.unit ?? "—", cols[2], y, { width: 40 });
-            doc.text(e.referenceRange, cols[3], y, { width: 130 });
-            doc.text(e.methodology ?? "CLIA / Photometry", cols[4], y, { width: 120 });
-            doc.y = y + 12;
-          }
-          doc.moveDown(0.35);
+          drawTestBlock(doc, result, ctx);
         }
-        doc.moveDown(0.4);
       }
 
-      if (input.clinicalImpression?.trim()) {
-        drawClinicalImpression(doc, input.clinicalImpression.trim());
+      if (detailed && input.clinicalImpression?.trim()) {
+        drawClinicalImpression(doc, input.clinicalImpression.trim(), ctx);
       }
 
-      if (doc.y > 640) doc.addPage();
-      const qrY = doc.y;
-      doc.image(qrPng, 40, qrY, { width: 70, height: 70 });
-      doc.fontSize(8).fillColor("#000").text("Scan for anti-forgery verification", 120, qrY + 12);
-      doc.fillColor("#0b5cab").text(verifyUrl, 120, qrY + 28, { width: 380, link: verifyUrl });
-
-      doc.y = qrY + 82;
-      doc.fillColor("#000");
-      const sigY = doc.y;
-      doc.font("Helvetica-Bold").fontSize(9).text("Lab Technician", 48, sigY);
-      doc.font("Helvetica").fontSize(8);
-      doc.text("Name: ________________", 48, sigY + 14);
-      doc.text("Qualification: B.Sc. MLT", 48, sigY + 28);
-      doc.text("Signature: ________________", 48, sigY + 42);
-
-      const pathName = sigRow?.pathologist_name ?? profile.fullName;
-      const license = sigRow?.pathologist_license ?? profile.medicalLicenseNumber;
-      doc.font("Helvetica-Bold").fontSize(9).text("MD Pathologist", 320, sigY);
-      doc.font("Helvetica").fontSize(8);
-      doc.text(`Name: ${pathName}`, 320, sigY + 14);
-      doc.text(`MCI / DMC Reg No.: ${license}`, 320, sigY + 28);
-      const sig = sigRow?.pathologist_signature_url ?? profile.digitalSignatureUrl;
-      doc.text(sig ? `e-Signature: on file` : "Signature: ________________", 320, sigY + 42);
-      if (sig) doc.fontSize(6).fillColor("#555").text(sig, 320, sigY + 54, { width: 200 });
-
-      doc.y = sigY + 75;
-      doc.fontSize(7).fillColor("#444").text(
-        "NABL / ISO 15189 Disclaimer: This report is intended for clinical diagnostic purposes and must be interpreted by a qualified physician in correlation with clinical findings. Partial reproduction is prohibited without laboratory authorization. Results relate only to the sample tested.",
-        { width: 515 }
-      );
-
+      void drawSignaturesAndQr(doc, ctx, verifyUrl, qrPng, signaturePng).then(() => {
       if (patientSummary) {
-        drawPatientSummaryPage(doc, labName, first.patientName, patientSummary);
+          drawPatientSummarySection(doc, ctx, labName, first.patientName, patientSummary);
       }
 
       const range = doc.bufferedPageRange();
       for (let i = range.start; i < range.start + range.count; i += 1) {
         doc.switchToPage(i);
-        doc.fontSize(8).fillColor("#666").text(`Page ${i - range.start + 1} of ${range.count}`, 40, 820, {
-          align: "center",
-          width: 515
-        });
+          stampPageChrome(doc, ctx, i - range.start + 1, range.count);
       }
-
       doc.end();
+      }).catch(reject);
     });
 
     const encrypted = encryptBuffer(plainPdf);
-    // Always keep a local AES-GCM copy for failover, then push to private S3 when configured
     await ensureDir();
     const localPath = path.join(reportsDir, `${input.orderId}.pdf.enc`);
     await fs.promises.writeFile(localPath, encrypted);

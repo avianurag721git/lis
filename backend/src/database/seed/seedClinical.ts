@@ -122,11 +122,20 @@ const seedPatients = async (tenantId: string): Promise<void> => {
     }
   ];
 
+  const dobForAge = (ageYears: number): string => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - ageYears, 0, 15);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
   for (const p of patients) {
     await db.query(
-      `INSERT INTO patients (id, tenant_id, patient_code, uhid, name, phone, gender, age_years, blood_group, clinical_notes)
-       VALUES ($1,$2,$3,$3,$4,$5,$6,$7,$8,$9)`,
-      [p.id, tenantId, p.uhid, p.name, p.phone, p.gender, p.age, p.blood, p.notes]
+      `INSERT INTO patients (id, tenant_id, patient_code, uhid, name, phone, gender, age_years, date_of_birth, blood_group, clinical_notes)
+       VALUES ($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [p.id, tenantId, p.uhid, p.name, p.phone, p.gender, p.age, dobForAge(p.age), p.blood, p.notes]
     );
     seedLog.step(p.name, p.uhid);
   }
@@ -232,11 +241,17 @@ const seedOrdersAndSamples = async (
   ];
 
   for (const s of samples) {
+    const collectedAt = new Date();
+    collectedAt.setHours(collectedAt.getHours() - 4);
+    const receivedAt =
+      s.status === "RECEIVED_IN_LAB" || s.status === "REJECTED"
+        ? new Date(collectedAt.getTime() + 45 * 60 * 1000)
+        : null;
     await db.query(
       `INSERT INTO samples
        (id, tenant_id, order_id, patient_id, barcode, sample_type, tube_color, status,
-        temperature_log, rejection_reason, collected_at, collected_by_user_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,NOW(),$11)`,
+        temperature_log, rejection_reason, collected_at, received_at, collected_by_user_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13)`,
       [
         s.id,
         tenantId,
@@ -248,6 +263,8 @@ const seedOrdersAndSamples = async (
         s.status,
         s.temp ?? "[]",
         s.rejection ?? null,
+        collectedAt.toISOString(),
+        receivedAt ? receivedAt.toISOString() : null,
         users.phlebotomist
       ]
     );
@@ -337,6 +354,14 @@ const seedLabResults = async (
     );
 
     if (t.code === "CBC001") {
+      await db.query(
+        `UPDATE lab_results SET technician_note = $1 WHERE id = $2 AND tenant_id = $3`,
+        [
+          "Complete blood count within expected biological reference intervals for adult male. No significant cytosis or cytopenia observed.",
+          labResultId,
+          tenantId
+        ]
+      );
       await insertResultEntry(tenantId, labResultId, paramIds["Hemoglobin"]!, 14.5, {
         refMin: 13.5,
         refMax: 17.5
@@ -344,10 +369,17 @@ const seedLabResults = async (
       await insertResultEntry(tenantId, labResultId, paramIds["RBC Count"]!, 4.8, { refMin: 4.2, refMax: 5.4 });
       await insertResultEntry(tenantId, labResultId, paramIds["WBC Total Count"]!, 7200, { refMin: 4000, refMax: 11000 });
       await insertResultEntry(tenantId, labResultId, paramIds["Platelet Count"]!, 2.4, { refMin: 1.5, refMax: 4.5 });
+      await insertResultEntry(tenantId, labResultId, paramIds["Neutrophils %"]!, 58, { refMin: 40, refMax: 70 });
+      await insertResultEntry(tenantId, labResultId, paramIds["Lymphocytes %"]!, 30, { refMin: 20, refMax: 40 });
+      await insertResultEntry(tenantId, labResultId, paramIds["Eosinophils %"]!, 2, { refMin: 1, refMax: 4 });
+      await insertResultEntry(tenantId, labResultId, paramIds["Monocytes %"]!, 5, { refMin: 2, refMax: 8 });
     }
     if (t.code === "KFT001") {
       await insertResultEntry(tenantId, labResultId, paramIds["Serum Creatinine"]!, 1.1, { refMin: 0.7, refMax: 1.3 });
       await insertResultEntry(tenantId, labResultId, paramIds["Blood Urea"]!, 28, { refMin: 15, refMax: 40 });
+      await insertResultEntry(tenantId, labResultId, paramIds["Uric Acid"]!, 5.4, { refMin: 3.5, refMax: 7.2 });
+      await insertResultEntry(tenantId, labResultId, paramIds["Serum Sodium"]!, 140, { refMin: 135, refMax: 145 });
+      await insertResultEntry(tenantId, labResultId, paramIds["Serum Potassium"]!, 4.2, { refMin: 3.5, refMax: 5.1 });
       await insertResultEntry(tenantId, labResultId, paramIds["eGFR"]!, 92, {
         isCalculated: true,
         refMin: 60,
@@ -356,7 +388,27 @@ const seedLabResults = async (
     }
     if (t.code === "LFT001") {
       await insertResultEntry(tenantId, labResultId, paramIds["Bilirubin Total"]!, 0.9, { refMin: 0.3, refMax: 1.2 });
+      await insertResultEntry(tenantId, labResultId, paramIds["Bilirubin Direct"]!, 0.2, { refMin: 0, refMax: 0.3 });
+      await insertResultEntry(tenantId, labResultId, paramIds["SGOT/AST"]!, 28, { refMin: 0, refMax: 40 });
+      await insertResultEntry(tenantId, labResultId, paramIds["SGPT/ALT"]!, 32, { refMin: 0, refMax: 55 });
+      await insertResultEntry(tenantId, labResultId, paramIds["Alkaline Phosphatase"]!, 88, { refMin: 44, refMax: 147 });
+      await insertResultEntry(tenantId, labResultId, paramIds["Total Protein"]!, 7.1, { refMin: 6, refMax: 8.3 });
       await insertResultEntry(tenantId, labResultId, paramIds["Albumin"]!, 4.2, { refMin: 3.5, refMax: 5 });
+      await insertResultEntry(tenantId, labResultId, paramIds["Bilirubin Indirect"]!, 0.7, {
+        isCalculated: true,
+        refMin: 0.2,
+        refMax: 0.8
+      });
+      await insertResultEntry(tenantId, labResultId, paramIds["Globulin"]!, 2.9, {
+        isCalculated: true,
+        refMin: 2,
+        refMax: 3.5
+      });
+      await insertResultEntry(tenantId, labResultId, paramIds["A/G Ratio"]!, 1.4, {
+        isCalculated: true,
+        refMin: 1,
+        refMax: 2.5
+      });
     }
     if (t.code === "LIPID001") {
       await insertResultEntry(tenantId, labResultId, paramIds["Total Cholesterol"]!, 240, {
@@ -372,10 +424,19 @@ const seedLabResults = async (
         refMax: 150
       });
       await insertResultEntry(tenantId, labResultId, paramIds["HDL Cholesterol"]!, 42, { refMin: 40, refMax: null });
-      await insertResultEntry(tenantId, labResultId, paramIds["LDL"]!, 144, {
+      await insertResultEntry(tenantId, labResultId, paramIds["VLDL"]!, 56, {
         isCalculated: true,
         isAbnormal: true,
-        flag: "H"
+        flag: "H",
+        refMin: 5,
+        refMax: 40
+      });
+      await insertResultEntry(tenantId, labResultId, paramIds["LDL"]!, 142, {
+        isCalculated: true,
+        isAbnormal: true,
+        flag: "H",
+        refMin: 0,
+        refMax: 100
       });
     }
     seedLog.step(`Result ${t.code}`, "PATHOLOGIST_VERIFIED");

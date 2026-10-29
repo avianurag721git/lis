@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { AppError } from "../../../../common/errors/AppError";
 import { HTTP_STATUS } from "../../../../common/constants/httpStatus";
 import { paymentService } from "../../application/payment.service";
+import { routeParam } from "../../../../common/http/routeParam";
 
 const requireIdempotencyKey = (req: Request): string => {
   const key = req.header("Idempotency-Key");
@@ -30,7 +31,7 @@ export const getInvoiceById = async (req: Request, res: Response, next: NextFunc
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const invoiceId = req.params.id;
+    const invoiceId = routeParam(req.params.id);
     if (!invoiceId) {
       throw new AppError("Invoice id is required", HTTP_STATUS.BAD_REQUEST, "INVOICE_REQUIRED");
     }
@@ -46,7 +47,7 @@ export const getInvoicePayments = async (req: Request, res: Response, next: Next
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const invoiceId = req.params.id;
+    const invoiceId = routeParam(req.params.id);
     if (!invoiceId) {
       throw new AppError("Invoice id is required", HTTP_STATUS.BAD_REQUEST, "INVOICE_REQUIRED");
     }

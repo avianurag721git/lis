@@ -8,6 +8,7 @@ import { resolveOrderByPasscode, reportViewUrl } from "../orders/orderLifecycle.
 import { env } from "../../config/env";
 import { db } from "../../database/postgres";
 import { normalizeRole } from "../auth/permissions";
+import { routeParam } from "../../common/http/routeParam";
 
 const ok = <T>(res: Response, data: T, status: number = HTTP_STATUS.OK): void => {
   res.status(status).json({ success: true, data });
@@ -18,7 +19,7 @@ export const downloadOrderReport = async (req: Request, res: Response, next: Nex
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const orderId = req.params.orderId;
+    const orderId = routeParam(req.params.orderId);
     if (!orderId) {
       throw new AppError("orderId required", HTTP_STATUS.BAD_REQUEST, "ORDER_ID_REQUIRED");
     }
@@ -52,7 +53,7 @@ export const presignOrderReport = async (req: Request, res: Response, next: Next
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const orderId = req.params.orderId!;
+    const orderId = routeParam(req.params.orderId)!;
     const signed = await nablPdfEngine.createPresignedUrl(req.tenantId, orderId);
     ok(res, { download: signed });
   } catch (err) {
@@ -63,7 +64,7 @@ export const presignOrderReport = async (req: Request, res: Response, next: Next
 /** Public short-lived token download (no session) — token itself is the authz. */
 export const downloadPresignedReport = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const token = req.params.token;
+    const token = routeParam(req.params.token);
     if (!token) throw new AppError("token required", HTTP_STATUS.BAD_REQUEST, "TOKEN_REQUIRED");
     const resolved = await reportObjectStore.resolvePresignToken(token);
     const encrypted = await reportObjectStore.getEncryptedReport(resolved.storageUri);
@@ -82,7 +83,7 @@ export const generateOrderReport = async (req: Request, res: Response, next: Nex
     if (!req.tenantId || !req.authUser?.userId) {
       throw new AppError("Auth/tenant context missing", HTTP_STATUS.BAD_REQUEST, "CONTEXT_REQUIRED");
     }
-    const orderId = req.params.orderId;
+    const orderId = routeParam(req.params.orderId);
     if (!orderId) {
       throw new AppError("orderId required", HTTP_STATUS.BAD_REQUEST, "ORDER_ID_REQUIRED");
     }
@@ -102,7 +103,7 @@ export const distributeOrderReport = async (req: Request, res: Response, next: N
     if (!req.tenantId || !req.authUser?.userId) {
       throw new AppError("Auth/tenant context missing", HTTP_STATUS.BAD_REQUEST, "CONTEXT_REQUIRED");
     }
-    const orderId = req.params.orderId;
+    const orderId = routeParam(req.params.orderId);
     if (!orderId) {
       throw new AppError("orderId required", HTTP_STATUS.BAD_REQUEST, "ORDER_ID_REQUIRED");
     }
@@ -122,7 +123,7 @@ export const distributeOrderReport = async (req: Request, res: Response, next: N
 
 export const verifyOrderReport = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const orderId = req.params.orderId;
+    const orderId = routeParam(req.params.orderId);
     if (!orderId) {
       throw new AppError("orderId required", HTTP_STATUS.BAD_REQUEST, "ORDER_ID_REQUIRED");
     }
@@ -137,7 +138,7 @@ export const verifyOrderReport = async (req: Request, res: Response, next: NextF
 /** Public patient magic-link metadata + PDF download redirect. */
 export const viewReportByPasscode = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const passcode = req.params.passcode?.trim();
+    const passcode = routeParam(req.params.passcode)?.trim();
     if (!passcode) {
       throw new AppError("Passcode required", HTTP_STATUS.BAD_REQUEST, "PASSCODE_REQUIRED");
     }

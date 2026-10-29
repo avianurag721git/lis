@@ -3,6 +3,7 @@ import { HTTP_STATUS } from "../../common/constants/httpStatus";
 import { saasAdminService } from "./saasAdmin.service";
 import { saasTenantRepository } from "../saas/saasTenant.repository";
 import { tenantRepository } from "../tenant/tenant.repository";
+import { routeParam } from "../../common/http/routeParam";
 
 export const getOverview = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -33,7 +34,7 @@ export const createTenant = async (req: Request, res: Response, next: NextFuncti
 
 export const updateTenant = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const tenantId = req.params.tenantId as string;
+    const tenantId = routeParam(req.params.tenantId) as string;
     await saasAdminService.updateTenant(tenantId, req.body);
     res.status(HTTP_STATUS.OK).json({ ok: true });
   } catch (error) {
@@ -53,7 +54,7 @@ export const onboard = async (req: Request, res: Response, next: NextFunction): 
 /** Public endpoint for login/signup white-label bootstrap (no auth). */
 export const getPublicBranding = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const subdomain = (req.params.subdomain as string).toLowerCase();
+    const subdomain = (routeParam(req.params.subdomain) as string).toLowerCase();
     const row = await saasTenantRepository.findBySubdomain(subdomain);
     const mem = tenantRepository.findBySubdomain(subdomain);
     const source = row ?? mem;

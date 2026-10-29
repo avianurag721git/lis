@@ -47,8 +47,10 @@ export type PendingLabResultRow = {
   patientPhone: string | null;
   patientGender: "MALE" | "FEMALE" | "OTHER" | null;
   patientAgeYears: number | null;
+  patientDob: string | null;
   testId: string;
   testName: string;
+  testSampleType: string | null;
   departmentId: string;
   departmentName: string;
   status: LabResultStatus;
@@ -56,6 +58,13 @@ export type PendingLabResultRow = {
   referredDoctor: string | null;
   sampleCollectedAt: string | null;
   sampleReceivedAt: string | null;
+  sampleType: string | null;
+  sampleQuality: string | null;
+  verifiedAt: string | null;
+  pathologistName: string | null;
+  pathologistLicense: string | null;
+  pathologistSignatureUrl: string | null;
+  approvedByUserId: string | null;
   entries: LabResultEntryDto[];
 };
 

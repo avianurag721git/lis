@@ -28,7 +28,22 @@ const pad = (n: number): string => String(n).padStart(2, "0");
 export const toIsoDate = (d: Date): string =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-const parseIsoDate = (raw: string): Date | null => {
+/** Coerce pg Date / ISO string to YYYY-MM-DD. Never use String(date).slice(0,10). */
+export const coerceIsoDate = (value: Date | string | null | undefined): string | null => {
+  if (value == null || value === "") return null;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    // node-pg DATE values are UTC midnight — use UTC parts to avoid locale year corruption
+    return `${value.getUTCFullYear()}-${pad(value.getUTCMonth() + 1)}-${pad(value.getUTCDate())}`;
+  }
+  const raw = String(value).trim();
+  const isoPrefix = /^(\d{4}-\d{2}-\d{2})/.exec(raw);
+  if (isoPrefix) return isoPrefix[1]!;
+  // Refuse non-ISO free-form strings (e.g. "Thu Jan 15" → wrong year in V8)
+  return null;
+};
+
+export const parseIsoDate = (raw: string): Date | null => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw.trim());
   if (!m) return null;
   const year = Number(m[1]);
@@ -39,6 +54,13 @@ const parseIsoDate = (raw: string): Date | null => {
     return null;
   }
   return dt;
+};
+
+export const formatIsoDateDisplay = (dob: string | null | undefined): string => {
+  if (!dob) return "—";
+  const d = parseIsoDate(dob);
+  if (!d) return dob;
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 };
 
 const startOfLocalDay = (d: Date): Date => new Date(d.getFullYear(), d.getMonth(), d.getDate());

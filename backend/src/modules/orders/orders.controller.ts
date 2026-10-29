@@ -4,6 +4,7 @@ import { HTTP_STATUS } from "../../common/constants/httpStatus";
 import { ordersService } from "./orders.service";
 import { emitOrderBooked } from "../../realtime/sampleEvents";
 import { getOrderPipelineStatus } from "./orderLifecycle.util";
+import { routeParam } from "../../common/http/routeParam";
 
 const ok = <T>(res: Response, data: T, status: number = HTTP_STATUS.OK): void => {
   res.status(status).json({ success: true, data });
@@ -51,7 +52,7 @@ export const getOrderPipeline = async (req: Request, res: Response, next: NextFu
     if (!req.tenantId) {
       throw new AppError("Tenant context missing", HTTP_STATUS.BAD_REQUEST, "TENANT_REQUIRED");
     }
-    const orderId = req.params.orderId;
+    const orderId = routeParam(req.params.orderId);
     if (!orderId) {
       throw new AppError("orderId required", HTTP_STATUS.BAD_REQUEST, "ORDER_ID_REQUIRED");
     }

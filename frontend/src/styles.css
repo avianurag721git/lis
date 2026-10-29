@@ -1119,6 +1119,26 @@ input[type="number"]::-webkit-inner-spin-button {
   margin-bottom: 0;
 }
 
+.page-head__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.page-head__row .page-title {
+  margin-bottom: 0;
+}
+
+.order-booking-scan-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .page-title {
   font-size: 1.5rem;
   font-weight: 700;
@@ -4268,6 +4288,171 @@ input[type="number"]::-webkit-inner-spin-button {
   margin-bottom: 16px;
 }
 
+.dash-bookmarks {
+  margin-bottom: 16px;
+}
+
+.dash-bookmarks__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.dash-bookmarks__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dash-bookmark-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(160deg, #ffffff 0%, #f8fafc 100%);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.dash-bookmark-tile:hover {
+  border-color: #99f6e4;
+  box-shadow: 0 8px 20px rgba(15, 118, 110, 0.08);
+  transform: translateY(-1px);
+}
+
+.dash-bookmark-tile__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #ecfdf5;
+  color: #0f766e;
+  flex-shrink: 0;
+}
+
+.dash-bookmark-tile__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dash-bookmark-tile__label {
+  font-weight: 600;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.dash-bookmark-tile__hint {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.dash-bookmark-tile__pin {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.dash-bookmark-tile__pin:hover {
+  background: #f1f5f9;
+  color: #0f766e;
+}
+
+.dash-bookmarks__catalog {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.dash-bookmarks__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dash-bookmark-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dash-bookmark-chip.is-on {
+  border-color: #99f6e4;
+  background: #ecfdf5;
+  color: #0f766e;
+  font-weight: 600;
+}
+
+.dark .dash-bookmark-tile {
+  border-color: #334155;
+  background: linear-gradient(160deg, #1e293b 0%, #0f172a 100%);
+}
+
+.dark .dash-bookmark-tile:hover {
+  border-color: #14b8a6;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.dark .dash-bookmark-tile__icon {
+  background: rgba(20, 184, 166, 0.15);
+  color: #5eead4;
+}
+
+.dark .dash-bookmark-tile__label {
+  color: #f8fafc;
+}
+
+.dark .dash-bookmark-tile__hint {
+  color: #94a3b8;
+}
+
+.dark .dash-bookmarks__catalog {
+  border-top-color: #334155;
+}
+
+.dark .dash-bookmark-chip {
+  border-color: #475569;
+  background: #1e293b;
+  color: #cbd5e1;
+}
+
+.dark .dash-bookmark-chip.is-on {
+  border-color: #14b8a6;
+  background: rgba(20, 184, 166, 0.12);
+  color: #5eead4;
+}
+
+@media (max-width: 960px) {
+  .dash-bookmarks__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .dash-bookmarks__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .chart-card .chart-box {
   min-height: 260px;
 }
@@ -6115,4 +6300,34 @@ input[type="number"]::-webkit-inner-spin-button {
   .header-menu-btn {
     display: inline-flex !important;
   }
+}
+
+.logout-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(222 47% 5% / 0.35);
+  backdrop-filter: blur(2px);
+}
+
+.logout-overlay__card {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.85rem 1.15rem;
+  border-radius: 12px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--surface));
+  color: hsl(var(--foreground));
+  font-size: 0.95rem;
+  font-weight: 500;
+  box-shadow: 0 12px 40px hsl(222 47% 5% / 0.18);
+}
+
+.header-logout:disabled {
+  opacity: 0.75;
+  cursor: wait;
 }

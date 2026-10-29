@@ -3,6 +3,7 @@ import { db } from "../../database/postgres";
 import { env } from "../../config/env";
 import { AppError } from "../../common/errors/AppError";
 import { HTTP_STATUS } from "../../common/constants/httpStatus";
+import { coerceIsoDate } from "../../common/age/patientAge";
 import { aliasFromParameterName, evaluateFormula } from "./formula.engine";
 import {
   BatchVerifyInput,
@@ -455,10 +456,40 @@ const mapPendingRow = async (tenantId: string, row: any): Promise<PendingLabResu
     [tenantId, row.id]
   );
 
+  const paramIds = entriesResult.rows.map((e: any) => e.parameter_id as string);
+  const rangesResult =
+    paramIds.length > 0
+      ? await db.query(
+          `SELECT parameter_id, gender, age_min, age_max, normal_min, normal_max
+           FROM parameter_normal_ranges
+           WHERE tenant_id = $1 AND parameter_id = ANY($2::uuid[])`,
+          [tenantId, paramIds]
+        )
+      : { rows: [] as any[] };
+  const allRules: RangeRule[] = rangesResult.rows.map((r: any) => ({
+    parameterId: r.parameter_id,
+    gender: r.gender,
+    ageMin: r.age_min,
+    ageMax: r.age_max,
+    normalMin: r.normal_min == null ? null : Number(r.normal_min),
+    normalMax: r.normal_max == null ? null : Number(r.normal_max)
+  }));
+  const patientGender = row.patient_gender as "MALE" | "FEMALE" | "OTHER" | null;
+  const patientAgeYears = row.patient_age_years != null ? Number(row.patient_age_years) : null;
+
   const entries: LabResultEntryDto[] = entriesResult.rows.map((e: any) => {
     const alias = (e.formula_alias as string) || aliasFromParameterName(e.parameter_name as string);
-    const referenceMin = e.reference_min == null ? null : Number(e.reference_min);
-    const referenceMax = e.reference_max == null ? null : Number(e.reference_max);
+    let referenceMin = e.reference_min == null ? null : Number(e.reference_min);
+    let referenceMax = e.reference_max == null ? null : Number(e.reference_max);
+    if (referenceMin == null && referenceMax == null) {
+      const best = chooseBestRule(
+        allRules.filter((r) => r.parameterId === e.parameter_id),
+        patientGender,
+        patientAgeYears
+      );
+      referenceMin = best?.normalMin ?? null;
+      referenceMax = best?.normalMax ?? null;
+    }
     const deltaCheck: DeltaCheck | null =
       e.delta_flag === "HIGH_VARIANCE" && e.delta_previous_value != null
         ? {
@@ -491,6 +522,16 @@ const mapPendingRow = async (tenantId: string, row: any): Promise<PendingLabResu
     };
   });
 
+  const sampleStatus = row.sample_status as string | null;
+  const sampleQuality =
+    row.sample_rejection_reason
+      ? String(row.sample_rejection_reason)
+      : sampleStatus === "RECEIVED_IN_LAB" || sampleStatus === "COLLECTED" || sampleStatus === "IN_TRANSIT"
+        ? "Adequate"
+        : sampleStatus === "REJECTED"
+          ? "Inadequate"
+          : null;
+
   return {
     labResultId: row.id,
     orderId: row.order_id,
@@ -501,30 +542,50 @@ const mapPendingRow = async (tenantId: string, row: any): Promise<PendingLabResu
     patientPhone: row.patient_phone ?? null,
     patientGender: row.patient_gender,
     patientAgeYears: row.patient_age_years != null ? Number(row.patient_age_years) : null,
+    patientDob: coerceIsoDate(row.patient_dob as Date | string | null | undefined),
     testId: row.test_id,
     testName: row.test_name,
+    testSampleType: row.test_sample_type ?? null,
     departmentId: row.department_id,
     departmentName: row.department_name,
     status: row.status,
     technicianNote: row.technician_note,
-    referredDoctor: row.referred_doctor ?? null,
+    referredDoctor: row.referral_doctor_name ?? row.referred_doctor ?? null,
     sampleCollectedAt: row.sample_collected_at ? new Date(row.sample_collected_at).toISOString() : null,
     sampleReceivedAt: row.sample_received_at ? new Date(row.sample_received_at).toISOString() : null,
+    sampleType: row.sample_type ?? row.test_sample_type ?? null,
+    sampleQuality,
+    verifiedAt: row.verified_at ? new Date(row.verified_at).toISOString() : null,
+    pathologistName: row.pathologist_name ?? null,
+    pathologistLicense: row.pathologist_license ?? null,
+    pathologistSignatureUrl: row.pathologist_signature_url ?? null,
+    approvedByUserId: row.approved_by_user_id ?? null,
     entries
   };
 };
 
 const pendingSelectSql = `SELECT lr.*, o.order_number,
               p.name AS patient_name, COALESCE(p.uhid, p.patient_code) AS patient_uhid, p.phone AS patient_phone,
-              p.gender AS patient_gender,
+              p.gender AS patient_gender, p.date_of_birth AS patient_dob,
               CASE
                 WHEN p.date_of_birth IS NOT NULL THEN (CURRENT_DATE - p.date_of_birth)::numeric / 365.25
                 WHEN p.age_days IS NOT NULL THEN p.age_days::numeric / 365.25
                 ELSE p.age_years::numeric
               END AS patient_age_years,
-              t.name AS test_name, d.name AS department_name,
+              t.name AS test_name, t.sample_type AS test_sample_type, d.name AS department_name,
+              rd.name AS referral_doctor_name,
               (SELECT MIN(s.collected_at) FROM samples s WHERE s.order_id = o.id AND s.tenant_id = o.tenant_id) AS sample_collected_at,
-              (SELECT MIN(s.received_at) FROM samples s WHERE s.order_id = o.id AND s.tenant_id = o.tenant_id) AS sample_received_at`;
+              (SELECT MIN(s.received_at) FROM samples s WHERE s.order_id = o.id AND s.tenant_id = o.tenant_id) AS sample_received_at,
+              (SELECT s.sample_type FROM samples s WHERE s.order_id = o.id AND s.tenant_id = o.tenant_id ORDER BY s.collected_at NULLS LAST LIMIT 1) AS sample_type,
+              (SELECT s.status FROM samples s WHERE s.order_id = o.id AND s.tenant_id = o.tenant_id ORDER BY s.collected_at NULLS LAST LIMIT 1) AS sample_status,
+              (SELECT s.rejection_reason FROM samples s WHERE s.order_id = o.id AND s.tenant_id = o.tenant_id ORDER BY s.collected_at NULLS LAST LIMIT 1) AS sample_rejection_reason`;
+
+const pendingFromSql = `FROM lab_results lr
+       JOIN order_bookings o ON o.id = lr.order_id
+       JOIN patients p ON p.id = lr.patient_id
+       JOIN tests t ON t.id = lr.test_id
+       JOIN departments d ON d.id = lr.department_id
+       LEFT JOIN referral_doctors rd ON rd.id = o.referral_doctor_id AND rd.tenant_id = o.tenant_id`;
 
 export const labResultService = {
   async listPending(
@@ -548,11 +609,7 @@ export const labResultService = {
 
     const result = await db.query(
       `${pendingSelectSql}
-       FROM lab_results lr
-       JOIN order_bookings o ON o.id = lr.order_id
-       JOIN patients p ON p.id = lr.patient_id
-       JOIN tests t ON t.id = lr.test_id
-       JOIN departments d ON d.id = lr.department_id
+       ${pendingFromSql}
        WHERE ${where}
        ORDER BY lr.updated_at DESC
        LIMIT 100`,
@@ -653,11 +710,7 @@ export const labResultService = {
 
     const refreshed = await db.query(
       `${pendingSelectSql}
-       FROM lab_results lr
-       JOIN order_bookings o ON o.id = lr.order_id
-       JOIN patients p ON p.id = lr.patient_id
-       JOIN tests t ON t.id = lr.test_id
-       JOIN departments d ON d.id = lr.department_id
+       ${pendingFromSql}
        WHERE lr.tenant_id = $1 AND lr.id = $2`,
       [tenantId, input.labResultId]
     );
@@ -668,11 +721,7 @@ export const labResultService = {
     ensurePg();
     const result = await db.query(
       `${pendingSelectSql}
-       FROM lab_results lr
-       JOIN order_bookings o ON o.id = lr.order_id
-       JOIN patients p ON p.id = lr.patient_id
-       JOIN tests t ON t.id = lr.test_id
-       JOIN departments d ON d.id = lr.department_id
+       ${pendingFromSql}
        WHERE lr.tenant_id = $1 AND lr.status = 'TECHNICIAN_APPROVED'
        ORDER BY lr.approved_at DESC NULLS LAST
        LIMIT 100`,
@@ -689,11 +738,7 @@ export const labResultService = {
     ensurePg();
     const result = await db.query(
       `${pendingSelectSql}
-       FROM lab_results lr
-       JOIN order_bookings o ON o.id = lr.order_id
-       JOIN patients p ON p.id = lr.patient_id
-       JOIN tests t ON t.id = lr.test_id
-       JOIN departments d ON d.id = lr.department_id
+       ${pendingFromSql}
        WHERE lr.tenant_id = $1 AND lr.id = $2
        LIMIT 1`,
       [tenantId, labResultId]
@@ -706,18 +751,23 @@ export const labResultService = {
     ensurePg();
     const result = await db.query(
       `${pendingSelectSql}
-       FROM lab_results lr
-       JOIN order_bookings o ON o.id = lr.order_id
-       JOIN patients p ON p.id = lr.patient_id
-       JOIN tests t ON t.id = lr.test_id
-       JOIN departments d ON d.id = lr.department_id
+       ${pendingFromSql}
        WHERE lr.tenant_id = $1 AND lr.order_id = $2 AND lr.status = 'PATHOLOGIST_VERIFIED'
        ORDER BY lr.verified_at ASC NULLS LAST`,
       [tenantId, orderId]
     );
     const out: PendingLabResultRow[] = [];
     for (const row of result.rows) {
-      out.push(await mapPendingRow(tenantId, row));
+      const mapped = await mapPendingRow(tenantId, row);
+      // Reports must not include placeholder catalog rows without entered values
+      out.push({
+        ...mapped,
+        entries: mapped.entries.filter(
+          (e) =>
+            !e.id.startsWith("draft:") &&
+            (e.value != null || Boolean(e.valueText?.trim() && e.valueText.trim() !== "—"))
+        )
+      });
     }
     return out;
   },
@@ -808,11 +858,7 @@ export const labResultService = {
       );
       const refreshed = await db.query(
         `${pendingSelectSql}
-         FROM lab_results lr
-         JOIN order_bookings o ON o.id = lr.order_id
-         JOIN patients p ON p.id = lr.patient_id
-         JOIN tests t ON t.id = lr.test_id
-         JOIN departments d ON d.id = lr.department_id
+         ${pendingFromSql}
          WHERE lr.tenant_id = $1 AND lr.id = $2`,
         [tenantId, id]
       );
@@ -848,11 +894,7 @@ export const labResultService = {
     );
     const refreshed = await db.query(
       `${pendingSelectSql}
-       FROM lab_results lr
-       JOIN order_bookings o ON o.id = lr.order_id
-       JOIN patients p ON p.id = lr.patient_id
-       JOIN tests t ON t.id = lr.test_id
-       JOIN departments d ON d.id = lr.department_id
+       ${pendingFromSql}
        WHERE lr.tenant_id = $1 AND lr.id = $2`,
       [tenantId, input.labResultId]
     );

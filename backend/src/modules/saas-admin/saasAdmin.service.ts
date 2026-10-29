@@ -7,7 +7,14 @@ import { logger } from "../../common/logger/logger";
 import { registerUser } from "../auth/auth.service";
 import { saasTenantRepository } from "../saas/saasTenant.repository";
 import { subscriptionRepository } from "../saas/subscription.repository";
-import { PLAN_MRR_USD, SubscriptionPlan, SubscriptionStatus, defaultBranding, defaultSettings } from "../saas/saas.types";
+import {
+  PLAN_MRR_USD,
+  SubscriptionPlan,
+  SubscriptionStatus,
+  defaultBranding,
+  defaultFinance,
+  defaultSettings
+} from "../saas/saas.types";
 import { tenantRepository } from "../tenant/tenant.repository";
 import { tenantService } from "../tenant/tenant.service";
 import { runQaDatabaseSeed } from "../../database/qaSeed";
@@ -144,7 +151,8 @@ export const saasAdminService = {
         logoUrl: branding.logoUrl,
         reportTemplate: "STANDARD",
         branding,
-        settings
+        settings,
+        finance: defaultFinance()
       }
     });
 

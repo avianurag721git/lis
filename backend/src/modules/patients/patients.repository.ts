@@ -9,7 +9,7 @@ import {
   hashIdentifier,
   maskNationalId
 } from "../../common/crypto/phiEncryption";
-import { AgeUnit, ageResolveErrorCode, resolvePatientAge } from "../../common/age/patientAge";
+import { AgeUnit, ageResolveErrorCode, coerceIsoDate, resolvePatientAge } from "../../common/age/patientAge";
 import { NationalIdType, Patient, PatientGender, UpsertPatientInput } from "./patients.types";
 
 const ensurePg = (): void => {
@@ -18,11 +18,7 @@ const ensurePg = (): void => {
   }
 };
 
-const isoDate = (value: Date | string | null | undefined): string | null => {
-  if (!value) return null;
-  if (typeof value === "string") return value.slice(0, 10);
-  return value.toISOString().slice(0, 10);
-};
+const isoDate = (value: Date | string | null | undefined): string | null => coerceIsoDate(value);
 
 const resolveAgeOrThrow = (input: {
   dateOfBirth?: string | null;

@@ -95,7 +95,7 @@ export const saveParameterStudioSchema = z.object({
 export const previewFormulaSchema = z.object({
   body: z.object({
     formula: z.string().min(1).max(500),
-    values: z.record(z.number())
+    values: z.record(z.string(), z.number())
   })
 });
 

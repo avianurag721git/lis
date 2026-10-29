@@ -54,7 +54,7 @@ Express API (TypeScript, port 5000)     TCP 5055 (HL7/ASTM analyzers)
 
 **Production stack** (`docker-compose.yml`): Nginx (HTTPS) → Node API → PostgreSQL + Redis.
 
-**Local dev:** `npm run dev` at repo root starts backend (`ts-node-dev`) and frontend (Vite). Vite proxies API to `:5000` when `VITE_API_URL` is empty.
+**Local dev:** `npm run dev` at repo root starts backend (`tsx watch`) and frontend (Vite). Vite proxies API to `:5000` when `VITE_API_URL` is empty.
 
 ---
 

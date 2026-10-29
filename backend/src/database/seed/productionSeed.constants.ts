@@ -1,6 +1,7 @@
 /** Primary tenant for end-to-end QA flows. */
 export const APOLLO_TENANT_ID = "apollo";
 export const CITYLABS_TENANT_ID = "citylabs";
+export const DEMO_TENANT_ID = "demo";
 export const PLATFORM_TENANT_ID = "platform";
 
 export const SEED_PASSWORD = "password123";

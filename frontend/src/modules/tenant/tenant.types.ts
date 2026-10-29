@@ -1,9 +1,24 @@
+import type { ReportLayoutConfig } from "./reportLayout.types";
+import { defaultReportLayout, parseReportLayout } from "./reportLayout.types";
+
+export type { ReportLayoutConfig } from "./reportLayout.types";
+export { defaultReportLayout, parseReportLayout } from "./reportLayout.types";
+
 export type TenantBranding = {
   logoUrl: string | null;
   primaryColor: string;
   secondaryColor: string;
   labHeaderAddress: string;
   nablRegNo: string;
+  phone: string;
+  email: string;
+  website: string;
+  showNablBadge: boolean;
+  showNabhBadge: boolean;
+  accreditationLine: string;
+  processedAtLabel: string;
+  reportDisclaimer: string;
+  reportLayout: ReportLayoutConfig;
 };
 
 export type TenantSettings = {
@@ -73,7 +88,17 @@ export const defaultBranding = (): TenantBranding => ({
   primaryColor: "#0b5cab",
   secondaryColor: "#b91c1c",
   labHeaderAddress: "",
-  nablRegNo: ""
+  nablRegNo: "",
+  phone: "",
+  email: "",
+  website: "",
+  showNablBadge: true,
+  showNabhBadge: false,
+  accreditationLine: "NABL Accredited · ISO 15189:2022 Compliant",
+  processedAtLabel: "",
+  reportDisclaimer:
+    "This is a computer Generated medical diagnostic report that has been validated by Authorized medical practitioner/Doctor, the report does not need physical signature.",
+  reportLayout: defaultReportLayout()
 });
 
 export const defaultFinance = (): TenantFinance => ({

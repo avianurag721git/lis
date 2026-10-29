@@ -15,19 +15,50 @@ import {
   defaultSettings,
   normalizePlan
 } from "./saas.types";
+import { parseReportLayout } from "./reportLayout.types";
 import { Tenant } from "../tenant/tenant.types";
 
 const isPg = (): boolean => Boolean(env.databaseUrl);
 
 const parseBranding = (raw: unknown, config: Record<string, unknown>): TenantBranding => {
   const b = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const defaults = defaultBranding();
   const logoFromConfig = typeof config.logoUrl === "string" ? config.logoUrl : null;
   return {
     logoUrl: typeof b.logoUrl === "string" ? b.logoUrl : logoFromConfig,
-    primaryColor: typeof b.primaryColor === "string" ? b.primaryColor : "#0b5cab",
-    secondaryColor: typeof b.secondaryColor === "string" ? b.secondaryColor : "#b91c1c",
-    labHeaderAddress: typeof b.labHeaderAddress === "string" ? b.labHeaderAddress : "",
-    nablRegNo: typeof b.nablRegNo === "string" ? b.nablRegNo : ""
+    primaryColor: typeof b.primaryColor === "string" ? b.primaryColor : defaults.primaryColor,
+    secondaryColor: typeof b.secondaryColor === "string" ? b.secondaryColor : defaults.secondaryColor,
+    labHeaderAddress: typeof b.labHeaderAddress === "string" ? b.labHeaderAddress : defaults.labHeaderAddress,
+    nablRegNo: typeof b.nablRegNo === "string" ? b.nablRegNo : defaults.nablRegNo,
+    phone: typeof b.phone === "string" ? b.phone : defaults.phone,
+    email: typeof b.email === "string" ? b.email : defaults.email,
+    website: typeof b.website === "string" ? b.website : defaults.website,
+    showNablBadge: typeof b.showNablBadge === "boolean" ? b.showNablBadge : defaults.showNablBadge,
+    showNabhBadge: typeof b.showNabhBadge === "boolean" ? b.showNabhBadge : defaults.showNabhBadge,
+    accreditationLine:
+      typeof b.accreditationLine === "string" ? b.accreditationLine : defaults.accreditationLine,
+    processedAtLabel: typeof b.processedAtLabel === "string" ? b.processedAtLabel : defaults.processedAtLabel,
+    reportDisclaimer: typeof b.reportDisclaimer === "string" ? b.reportDisclaimer : defaults.reportDisclaimer,
+    reportLayout: (() => {
+      const layout = parseReportLayout(b.reportLayout);
+      // Legacy tenants without reportLayout: sync badge toggles into the default layout.
+      if (b.reportLayout == null) {
+        const showNabl = typeof b.showNablBadge === "boolean" ? b.showNablBadge : defaults.showNablBadge;
+        const showNabh = typeof b.showNabhBadge === "boolean" ? b.showNabhBadge : defaults.showNabhBadge;
+        return {
+          ...layout,
+          header: {
+            ...layout.header,
+            fields: layout.header.fields.map((f) => {
+              if (f.id === "nablBadge") return { ...f, enabled: showNabl };
+              if (f.id === "nabhBadge") return { ...f, enabled: showNabh };
+              return f;
+            })
+          }
+        };
+      }
+      return layout;
+    })()
   };
 };
 

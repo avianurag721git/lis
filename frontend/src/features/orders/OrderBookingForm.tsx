@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Plus, Search, User, UserPlus, X } from "lucide-react";
+import { Check, Plus, ScanLine, Search, User, UserPlus, X } from "lucide-react";
 import { patientsApi, Patient } from "../../modules/patients/patients.service";
 import {
   CatalogPackage,
@@ -13,6 +13,7 @@ import { BarcodeStickerModal } from "../samples/BarcodeStickerModal";
 import { OrderPipelineTracker } from "../../components/OrderPipelineTracker";
 import { ButtonSpinner } from "../../components/ButtonSpinner";
 import { DiscountInput } from "../../components/DiscountInput";
+import { Modal } from "../../components/Modal";
 import { NumberField } from "../../components/NumberField";
 import { PatientAgeFields } from "../../components/PatientAgeFields";
 import { ReferralDoctorSelect } from "./ReferralDoctorSelect";
@@ -79,6 +80,7 @@ export const OrderBookingForm = (): JSX.Element => {
   const [lastSamples, setLastSamples] = useState<SampleDto[]>([]);
   const [lastPatient, setLastPatient] = useState<Patient | null>(null);
   const [showStickers, setShowStickers] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const [patientSearchLoading, setPatientSearchLoading] = useState(false);
   const [selectedPatientSnapshot, setSelectedPatientSnapshot] = useState<Patient | null>(null);
   const patientResultsRef = useRef<HTMLDivElement>(null);
@@ -274,6 +276,7 @@ export const OrderBookingForm = (): JSX.Element => {
       `OCR: matched ${result.matchedTests.length} test(s)` +
         (result.unmatchedTests.length ? ` · unmatched: ${result.unmatchedTests.join(", ")}` : "")
     );
+    setScanOpen(false);
   };
 
   const submit = async (e: FormEvent): Promise<void> => {
@@ -345,7 +348,17 @@ export const OrderBookingForm = (): JSX.Element => {
   return (
     <section className="page-shell page-shell--fluid">
       <div className="page-head">
-        <h1 className="page-title">Order booking</h1>
+        <div className="page-head__row">
+          <h1 className="page-title">Order booking</h1>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm order-booking-scan-btn"
+            onClick={() => setScanOpen(true)}
+          >
+            <ScanLine size={16} aria-hidden />
+            Scan prescription
+          </button>
+        </div>
         <p className="page-subtitle">Register or find a patient, add tests or packages, then book and print tube barcodes.</p>
       </div>
 
@@ -354,11 +367,16 @@ export const OrderBookingForm = (): JSX.Element => {
 
       {lastOrder ? <OrderPipelineTracker orderId={lastOrder.id} className="mb-4" /> : null}
 
-      <form className="order-booking-form" onSubmit={(e) => void submit(e)}>
-        <div className="card order-booking-ocr">
-          <PrescriptionOcrCapture tests={tests} onApply={applyOcr} />
-        </div>
+      <Modal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        title="Scan prescription"
+        size="lg"
+      >
+        <PrescriptionOcrCapture tests={tests} onApply={applyOcr} />
+      </Modal>
 
+      <form className="order-booking-form" onSubmit={(e) => void submit(e)}>
         <div className="order-booking-layout">
           <div className="order-booking-stack">
             <div className="card">
