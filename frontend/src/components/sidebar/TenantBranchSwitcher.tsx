@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Building2, ChevronDown, GitBranch, MapPin } from "lucide-react";
 import { httpClient } from "../../services/http";
 import { useTenant } from "../../modules/tenant/tenant.context";
+import { useAuth } from "../../modules/auth/auth.context";
+import { normalizeRole } from "../../modules/auth/permissions";
 import { cn } from "../../lib/utils";
 
 type TenantOption = { id: string; label: string };
@@ -16,12 +18,15 @@ const BRANCH_STORAGE_KEY = "diaglab_active_branch";
 
 export const TenantBranchSwitcher = (): JSX.Element => {
   const { tenantId, config, setTenantId } = useTenant();
+  const { user } = useAuth();
+  const isSuperAdmin = Boolean(user && normalizeRole(user.role) === "SUPER_ADMIN");
   const [open, setOpen] = useState(false);
   const [tenants, setTenants] = useState<TenantOption[]>([]);
   const [activeBranch, setActiveBranch] = useState<string>(() => localStorage.getItem(BRANCH_STORAGE_KEY) ?? "main");
   const ref = useRef<HTMLDivElement>(null);
 
-  const labName = config?.brandingName || "Apollo Pathology Labs";
+  const currentTenantLabel = tenants.find((t) => t.id === tenantId)?.label.replace(/\s*\([^)]*\)$/, "");
+  const labName = config?.brandingName || currentTenantLabel || tenantId || "Laboratory";
   const branchLabel = BRANCHES.find((b) => b.id === activeBranch)?.label ?? "Main Branch";
 
   useEffect(() => {
@@ -113,7 +118,7 @@ export const TenantBranchSwitcher = (): JSX.Element => {
             ))}
           </ul>
 
-          {tenants.length > 1 ? (
+          {isSuperAdmin && tenants.length > 1 ? (
             <>
               <div className="border-t border-slate-100 px-3 py-2 dark:border-slate-800">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Switch tenant</p>

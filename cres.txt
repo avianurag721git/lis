@@ -1,0 +1,51 @@
+cres.txt
+DiagLab — Demo Login Credentials (local dev)
+============================================
+
+Login URL:  http://127.0.0.1:5173/login
+            http://localhost:5173/login
+SaaS admin: http://127.0.0.1:5173/saas-admin
+
+------------------------------------------------------------
+1) DEMO LAB  —  Organization / Tenant ID: demo
+   Password: DemoPass123!   (same for all users below)
+------------------------------------------------------------
+Role              | Email
+------------------|-----------------------------
+Admin (Lab Mgr)   | admin@demo.local
+Receptionist      | receptionist@demo.local
+Lab Tech          | labtech@demo.local
+Pathologist       | pathologist@demo.local
+Phlebotomist      | phlebo@demo.local
+B2B Franchisee    | b2b@demo.local
+
+------------------------------------------------------------
+2) APOLLO PATHOLOGY LABS  —  Organization / Tenant ID: apollo
+   Password: password123   (same for all users below)
+------------------------------------------------------------
+Role              | Email
+------------------|-----------------------------
+Lab Manager       | manager@apollo.com
+Receptionist      | cashier@apollo.com
+Phlebotomist      | phleb@apollo.com
+Lab Technician    | tech@apollo.com
+Pathologist       | doctor@apollo.com
+B2B Franchisee    | center1@franchisee.com
+Patient (portal)  | patient@gmail.com
+
+------------------------------------------------------------
+3) PLATFORM SUPER ADMIN  —  Tenant ID: platform
+------------------------------------------------------------
+Email                       | Password
+----------------------------|--------------
+admin@lis.com               | password123
+superadmin@platform.local   | DemoPass123!
+
+Notes
+-----
+• Demo + super-admin users are seeded on API startup when
+  AUTH_SEED_DEMO_USER=true (backend/.env).
+• Apollo users are seeded on every API startup.
+• Demo password comes from AUTH_SEED_PASSWORD in backend/.env.
+• Re-seed anytime: npm run seed
+• B2B wallet (QA franchisee): ₹50,000 prepaid balance (code QA-FRANCHISE).

@@ -109,7 +109,7 @@ const resolveTaxRateForTenant = async (
     const n = Number(value);
     if (Number.isFinite(n) && n >= 0) return n;
   }
-  const { resolveTenantDefaultGst } = await import("../tenant/tenantFinance");
+  const { resolveTenantDefaultGst } = await import("../tenant/tenantFinance.js");
   return resolveTenantDefaultGst(tenantId);
 };
 
@@ -431,7 +431,7 @@ export const cashierService = {
 
         if (input.referralDoctorId !== undefined) {
           if (input.referralDoctorId) {
-            const { referralDoctorsService } = await import("../referral-doctors/referralDoctors.service");
+            const { referralDoctorsService } = await import("../referral-doctors/referralDoctors.service.js");
             const doc = await referralDoctorsService.getById(tenantId, input.referralDoctorId);
             if (!doc) {
               throw new AppError("Referral doctor not found", HTTP_STATUS.NOT_FOUND, "REFERRAL_DOCTOR_NOT_FOUND");

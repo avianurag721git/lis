@@ -195,7 +195,7 @@ export const ordersService = {
         if (!input.franchiseeId) {
           throw new AppError("franchiseeId required for B2B booking", HTTP_STATUS.BAD_REQUEST, "FRANCHISEE_REQUIRED");
         }
-        const { b2bService } = await import("../b2b/b2b.service");
+        const { b2bService } = await import("../b2b/b2b.service.js");
         const priced: typeof rawLines = [];
         for (const line of rawLines) {
           const catalogId = line.itemType === "TEST" ? line.testId : line.packageId;
@@ -234,13 +234,13 @@ export const ordersService = {
       let referredDoctorName = input.referredDoctor ?? null;
       const referralDoctorId = input.referralDoctorId ?? null;
       if (referralDoctorId) {
-        const { referralDoctorsService } = await import("../referral-doctors/referralDoctors.service");
+        const { referralDoctorsService } = await import("../referral-doctors/referralDoctors.service.js");
         const doc = await referralDoctorsService.getById(tenantId, referralDoctorId);
         if (doc) referredDoctorName = doc.name;
       }
 
       if (input.collectionType === "B2B_FRANCHISEE" && input.franchiseeId) {
-        const { b2bService } = await import("../b2b/b2b.service");
+        const { b2bService } = await import("../b2b/b2b.service.js");
         await b2bService.debitWallet(client, tenantId, input.franchiseeId, netAmountMinor, orderId, userId);
       }
 
@@ -319,7 +319,7 @@ export const ordersService = {
     });
 
     if (input.referralDoctorId) {
-      const { referralDoctorsService } = await import("../referral-doctors/referralDoctors.service");
+      const { referralDoctorsService } = await import("../referral-doctors/referralDoctors.service.js");
       await referralDoctorsService.recordUsage(tenantId, input.referralDoctorId);
     }
     return booked;
@@ -606,7 +606,7 @@ export const samplesService = {
       throw new AppError(`Cannot rapid-scan sample in status ${existing.status}`, HTTP_STATUS.CONFLICT, "INVALID_SAMPLE_STATUS");
     }
 
-    const { labResultService } = await import("../lab-results/labResult.service");
+    const { labResultService } = await import("../lab-results/labResult.service.js");
     const labResultsActivated =
       action === "RECEIVED_AND_PROCESSING" || action === "ALREADY_IN_LAB"
         ? await labResultService.activateProcessingForOrder(tenantId, sample.orderId, userId)

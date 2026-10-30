@@ -81,17 +81,20 @@ export const saasAdminService = {
 
     let mrrUsd = 0;
     let activeTenants = 0;
-    let totalActiveUsers = 0;
-    let totalSampleVolumeMonth = 0;
 
     for (const t of tenants) {
       if (t.subscriptionStatus === "ACTIVE" || t.subscriptionStatus === "TRIALING") {
         activeTenants += 1;
         mrrUsd += planPrice(t.plan);
       }
-      totalActiveUsers += await countActiveUsers(t.id);
-      totalSampleVolumeMonth += await countSampleVolume(t.id);
     }
+
+    const [userCounts, sampleCounts] = await Promise.all([
+      Promise.all(tenants.map((t) => countActiveUsers(t.id))),
+      Promise.all(tenants.map((t) => countSampleVolume(t.id)))
+    ]);
+    const totalActiveUsers = userCounts.reduce((sum, n) => sum + n, 0);
+    const totalSampleVolumeMonth = sampleCounts.reduce((sum, n) => sum + n, 0);
 
     return {
       totalTenants: allIds.size,
@@ -104,23 +107,27 @@ export const saasAdminService = {
 
   async listTenants(): Promise<TenantAdminRow[]> {
     const rows = await saasTenantRepository.listAll();
-    const result: TenantAdminRow[] = [];
-    for (const t of rows) {
-      result.push({
-        id: t.id,
-        name: t.name,
-        subdomain: t.subdomain,
-        customDomain: t.customDomain,
-        plan: t.plan,
-        subscriptionStatus: t.subscriptionStatus,
-        activeUsers: await countActiveUsers(t.id),
-        sampleVolumeMonth: await countSampleVolume(t.id),
-        mrrUsd: planPrice(t.plan),
-        enabledModules: t.settings.enabledModules,
-        createdAt: new Date().toISOString()
-      });
-    }
-    return result;
+    return Promise.all(
+      rows.map(async (t) => {
+        const [activeUsers, sampleVolumeMonth] = await Promise.all([
+          countActiveUsers(t.id),
+          countSampleVolume(t.id)
+        ]);
+        return {
+          id: t.id,
+          name: t.name,
+          subdomain: t.subdomain,
+          customDomain: t.customDomain,
+          plan: t.plan,
+          subscriptionStatus: t.subscriptionStatus,
+          activeUsers,
+          sampleVolumeMonth,
+          mrrUsd: planPrice(t.plan),
+          enabledModules: t.settings.enabledModules,
+          createdAt: new Date().toISOString()
+        };
+      })
+    );
   },
 
   async createTenant(input: {

@@ -62,7 +62,7 @@ const getStripe = (): Stripe => {
   if (!env.stripeSecretKey) {
     throw new AppError("Stripe is not configured for wallet recharge", HTTP_STATUS.INTERNAL_SERVER_ERROR, "STRIPE_MISSING");
   }
-  stripeClient ??= new Stripe(env.stripeSecretKey, { apiVersion: "2026-09-30.endive" });
+  stripeClient ??= new Stripe(env.stripeSecretKey, { apiVersion: "2026-10-28.endive" });
   return stripeClient;
 };
 
@@ -334,7 +334,7 @@ export const b2bService = {
     }
   ) {
     ensurePg();
-    const { ordersService } = await import("../orders/orders.service");
+    const { ordersService } = await import("../orders/orders.service.js");
     return ordersService.book(tenantId, userId, {
       collectionType: "B2B_FRANCHISEE",
       franchiseeId: input.franchiseeId,
@@ -570,7 +570,7 @@ export const b2bService = {
     csvText: string
   ): Promise<{ created: number; errors: string[]; orderIds: string[] }> {
     ensurePg();
-    const { ordersService } = await import("../orders/orders.service");
+    const { ordersService } = await import("../orders/orders.service.js");
     const lines = csvText
       .split(/\r?\n/)
       .map((l) => l.trim())

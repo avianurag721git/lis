@@ -21,7 +21,7 @@ const getStripe = (): Stripe => {
   if (!env.stripeSecretKey) {
     throw new AppError("Stripe is not configured", HTTP_STATUS.INTERNAL_SERVER_ERROR, "PAYMENT_CONFIG_MISSING");
   }
-  stripeClient ??= new Stripe(env.stripeSecretKey, { apiVersion: "2026-09-30.endive" });
+  stripeClient ??= new Stripe(env.stripeSecretKey, { apiVersion: "2026-10-28.endive" });
   return stripeClient;
 };
 

@@ -353,7 +353,7 @@ export const updateUserPermissions = async (userId: string, permissions: Permiss
 };
 
 export const loadTenantPermissionOverrides = async (tenantId: string): Promise<void> => {
-  const { userPermissionsRepository } = await import("../users/userPermissions.repository");
+  const { userPermissionsRepository } = await import("../users/userPermissions.repository.js");
   const map = await userPermissionsRepository.loadAllForTenant(tenantId);
   let changed = false;
   for (const [userId, permissions] of map.entries()) {

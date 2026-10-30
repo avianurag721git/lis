@@ -3,6 +3,7 @@ import axios from "axios";
 import { httpClient } from "../../services/http";
 import { env } from "../../utils/env";
 import { useAuth } from "../auth/auth.context";
+import { normalizeRole } from "../auth/permissions";
 import { tenantService } from "./tenant.service";
 import {
   FeatureKey,
@@ -33,8 +34,17 @@ const TenantContext = createContext<TenantContextValue | undefined>(undefined);
 type Props = { children: React.ReactNode };
 
 export const TenantProvider = ({ children }: Props): JSX.Element => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [tenantId, setTenantIdState] = useState<string | null>(tenantService.getTenantId());
+
+  // Lab users belong to exactly one tenant; undo any stale switch so headers match their token.
+  useEffect(() => {
+    if (!user?.tenantId || normalizeRole(user.role) === "SUPER_ADMIN") return;
+    if (tenantService.getTenantId() !== user.tenantId) {
+      tenantService.setTenantId(user.tenantId);
+      setTenantIdState(user.tenantId);
+    }
+  }, [user]);
   const [config, setConfig] = useState<TenantConfig | null>(null);
   const [saas, setSaas] = useState<TenantSaas | null>(null);
   const [publicBranding, setPublicBranding] = useState<TenantBranding | null>(null);

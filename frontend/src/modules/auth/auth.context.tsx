@@ -14,6 +14,8 @@ type LoginInput = {
 type AuthContextValue = {
   user: AuthUser | null;
   isAuthenticated: boolean;
+  /** True while a stored session is being restored on page load. */
+  isRestoring: boolean;
   isLoggingOut: boolean;
   hasPermission: (perm: Permission) => boolean;
   login: (payload: LoginInput) => Promise<AuthUser>;
@@ -44,11 +46,13 @@ type Props = {
 
 export const AuthProvider = ({ children }: Props): JSX.Element => {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [isRestoring, setIsRestoring] = useState<boolean>(() => Boolean(tokenService.getAccessToken()));
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const refreshProfile = useCallback(async (): Promise<void> => {
     if (!tokenService.getAccessToken()) {
       setUser(null);
+      setIsRestoring(false);
       return;
     }
     try {
@@ -65,6 +69,8 @@ export const AuthProvider = ({ children }: Props): JSX.Element => {
     } catch {
       tokenService.clear();
       setUser(null);
+    } finally {
+      setIsRestoring(false);
     }
   }, []);
 
@@ -95,6 +101,7 @@ export const AuthProvider = ({ children }: Props): JSX.Element => {
     () => ({
       user,
       isAuthenticated: Boolean(user && tokenService.getAccessToken()),
+      isRestoring,
       isLoggingOut,
       hasPermission,
       async login(payload: LoginInput) {
@@ -120,7 +127,7 @@ export const AuthProvider = ({ children }: Props): JSX.Element => {
       },
       refreshProfile
     }),
-    [user, isLoggingOut, hasPermission, refreshProfile]
+    [user, isRestoring, isLoggingOut, hasPermission, refreshProfile]
   );
 
   return (

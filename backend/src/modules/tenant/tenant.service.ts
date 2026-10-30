@@ -94,6 +94,10 @@ export const tenantService = {
       });
     }
 
+    if (env.authSeedDemoUser && !options.has("platform")) {
+      options.set("platform", { id: "platform", label: "Platform (Super Admin)" });
+    }
+
     return Array.from(options.values());
   }
 };

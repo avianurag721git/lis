@@ -28,6 +28,14 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
         permissions,
         ...(stored?.name ? { name: stored.name } : {})
       };
+      const role = stored?.role ?? decoded.role;
+      const headerTenant = req.header("x-tenant-id")?.trim();
+      if (role === "SUPER_ADMIN" && headerTenant) {
+        // Platform super admins may operate inside any lab tenant they switch to.
+        req.tenantId = headerTenant;
+        next();
+        return;
+      }
       req.tenantId = decoded.tenantId;
       await assertJwtTenantMatchesHost(req, decoded.tenantId);
       next();

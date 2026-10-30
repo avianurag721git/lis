@@ -117,6 +117,9 @@ export const applyBrandingCssVars = (branding: TenantBranding): void => {
 
 export const resolveSubdomain = (): string | null => {
   const host = window.location.hostname.toLowerCase();
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":")) {
+    return null;
+  }
   const parts = host.split(".");
   if (parts.length >= 3 && parts[0] !== "www" && parts[0] !== "api") {
     return parts[0] ?? null;

@@ -651,7 +651,7 @@ export const labResultService = {
         `UPDATE lab_results SET status = 'PROCESSING', updated_at = NOW() WHERE tenant_id = $1 AND id = $2`,
         [tenantId, input.labResultId]
       );
-      const { reagentService } = await import("../inventory/reagent.service");
+      const { reagentService } = await import("../inventory/reagent.service.js");
       await reagentService.deductForLabResult(tenantId, input.labResultId, row.test_id);
     }
 
@@ -697,7 +697,7 @@ export const labResultService = {
     );
 
     // Ensure reagent consumption even if PROCESSING deduct was skipped
-    const { reagentService } = await import("../inventory/reagent.service");
+    const { reagentService } = await import("../inventory/reagent.service.js");
     const lrRow = (
       await db.query(`SELECT test_id FROM lab_results WHERE tenant_id = $1 AND id = $2`, [
         tenantId,
@@ -824,7 +824,7 @@ export const labResultService = {
       throw new AppError("labResultIds required", HTTP_STATUS.BAD_REQUEST, "IDS_REQUIRED");
     }
 
-    const { qcService } = await import("../inventory/qc.service");
+    const { qcService } = await import("../inventory/qc.service.js");
     await qcService.assertVerificationAllowed(tenantId, input.labResultIds);
 
     const profile = await this.getPathologistProfile(tenantId, userId);
@@ -910,7 +910,7 @@ export const labResultService = {
        WHERE tenant_id = $1 AND order_id = $2 AND status = 'PENDING'`,
       [tenantId, orderId]
     );
-    const { reagentService } = await import("../inventory/reagent.service");
+    const { reagentService } = await import("../inventory/reagent.service.js");
     let activated = 0;
     for (const row of pending.rows) {
       await db.query(
@@ -921,7 +921,7 @@ export const labResultService = {
       activated += 1;
     }
     if (activated > 0) {
-      const { emitLabResultQueueUpdate } = await import("../../realtime/sampleEvents");
+      const { emitLabResultQueueUpdate } = await import("../../realtime/sampleEvents.js");
       emitLabResultQueueUpdate(tenantId, { orderId, activatedBy: userId, count: activated });
     }
     return activated;

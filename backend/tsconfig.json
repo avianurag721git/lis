@@ -1,13 +1,13 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "CommonJS",
+    "module": "Node16",
+"moduleResolution": "Node16",
     "lib": [
       "ES2022"
     ],
     "rootDir": "src",
     "outDir": "dist",
-    "moduleResolution": "bundler",
+    
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,

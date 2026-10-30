@@ -93,7 +93,7 @@ export const tenantContext = (req: Request, _res: Response, next: NextFunction):
         const tenantRow = await saasTenantRepository.findById(tenantId);
         if (tenantRow?.subscriptionStatus === "SUSPENDED" || tenantRow?.subscriptionStatus === "CANCELED") {
           const isPublicOnboard =
-            req.path.startsWith("/saas-admin/onboard") || req.path.startsWith("/tenants");
+            req.path.startsWith("/saas-admin") || req.path.startsWith("/tenants") || req.path.startsWith("/auth");
           if (!isPublicOnboard) {
             next(
               new AppError(

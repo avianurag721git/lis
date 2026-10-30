@@ -37,6 +37,35 @@ httpClient.interceptors.request.use((config) => {
   return config;
 });
 
+// Refresh tokens rotate on every use, so concurrent 401s must share one refresh call;
+// a second parallel refresh would present an already-revoked token and end the session.
+let refreshInFlight: Promise<string> | null = null;
+
+const refreshAccessTokenOnce = (): Promise<string> => {
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      const tenantId = tenantService.getTenantId();
+      const memoryRefresh = tokenService.getRefreshToken();
+      const response = await axios.post<{ accessToken: string; refreshToken?: string }>(
+        `${env.apiUrl}/auth/refresh`,
+        memoryRefresh ? { refreshToken: memoryRefresh } : {},
+        {
+          withCredentials: true,
+          ...(tenantId ? { headers: { "x-tenant-id": tenantId } } : {})
+        }
+      );
+      tokenService.setTokens({
+        accessToken: response.data.accessToken,
+        ...(response.data.refreshToken ? { refreshToken: response.data.refreshToken } : {})
+      });
+      return response.data.accessToken;
+    })().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+};
+
 httpClient.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -52,23 +81,10 @@ httpClient.interceptors.response.use(
 
     originalRequest._retry = true;
     try {
-      const tenantId = tenantService.getTenantId();
-      const memoryRefresh = tokenService.getRefreshToken();
-      const response = await axios.post<{ accessToken: string; refreshToken?: string }>(
-        `${env.apiUrl}/auth/refresh`,
-        memoryRefresh ? { refreshToken: memoryRefresh } : {},
-        {
-          withCredentials: true,
-          ...(tenantId ? { headers: { "x-tenant-id": tenantId } } : {})
-        }
-      );
-      tokenService.setTokens({
-        accessToken: response.data.accessToken,
-        ...(response.data.refreshToken ? { refreshToken: response.data.refreshToken } : {})
-      });
+      const accessToken = await refreshAccessTokenOnce();
       originalRequest.headers = {
         ...(originalRequest.headers ?? {}),
-        Authorization: `Bearer ${response.data.accessToken}`
+        Authorization: `Bearer ${accessToken}`
       };
       return httpClient(originalRequest);
     } catch {
