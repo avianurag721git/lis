@@ -38,8 +38,10 @@ const server = app.listen(env.port, () => {
     try {
       await seedDemoAuthUserIfEnabled();
       await seedSuperAdminIfEnabled();
-      // Always seed Apollo role accounts so login org "apollo" works even when AUTH_SEED_TENANT_ID=demo.
-      await seedProductionAuthUsers();
+      // Apollo + admin@lis.com use the fixed password "password123" — never seed them unless demo seeding is on.
+      if (env.authSeedDemoUser) {
+        await seedProductionAuthUsers();
+      }
       await loadTenantPermissionOverrides("apollo");
     } catch (err) {
       logger.error({ err }, "AUTH seed failed");

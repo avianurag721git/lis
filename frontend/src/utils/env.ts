@@ -1,4 +1,5 @@
 const fromEnv = import.meta.env.VITE_API_URL as string | undefined;
+const saasRootDomain = (import.meta.env.VITE_SAAS_ROOT_DOMAIN as string | undefined)?.trim().toLowerCase() ?? "";
 
 /**
  * Dev default: same-origin (Vite proxies API to backend on :5000).
@@ -16,5 +17,7 @@ const resolveApiUrl = (): string => {
 };
 
 export const env = {
-  apiUrl: resolveApiUrl()
+  apiUrl: resolveApiUrl(),
+  /** e.g. `example.com` — only `{tenant}.example.com` hosts map to a tenant (mirrors backend SAAS_ROOT_DOMAIN). */
+  saasRootDomain
 } as const;

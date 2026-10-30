@@ -1,5 +1,6 @@
 import type { ReportLayoutConfig } from "./reportLayout.types";
 import { defaultReportLayout, parseReportLayout } from "./reportLayout.types";
+import { env } from "../../utils/env";
 
 export type { ReportLayoutConfig } from "./reportLayout.types";
 export { defaultReportLayout, parseReportLayout } from "./reportLayout.types";
@@ -116,13 +117,18 @@ export const applyBrandingCssVars = (branding: TenantBranding): void => {
 };
 
 export const resolveSubdomain = (): string | null => {
-  const host = window.location.hostname.toLowerCase();
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":")) {
+  // Without a root domain, hosts like `app.pages.dev` / `app.onrender.com` would be misread as tenants.
+  const root = env.saasRootDomain;
+  if (!root) {
     return null;
   }
-  const parts = host.split(".");
-  if (parts.length >= 3 && parts[0] !== "www" && parts[0] !== "api") {
-    return parts[0] ?? null;
+  const host = window.location.hostname.toLowerCase();
+  if (!host.endsWith(`.${root}`)) {
+    return null;
   }
-  return null;
+  const sub = host.slice(0, -(root.length + 1));
+  if (!sub || sub.includes(".") || sub === "www" || sub === "api") {
+    return null;
+  }
+  return sub;
 };
